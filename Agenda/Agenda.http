@@ -1,6 +1,0 @@
-@Agenda_HostAddress = http://localhost:5230
-
-GET {{Agenda_HostAddress}}/weatherforecast/
-Accept: application/json
-
-###
