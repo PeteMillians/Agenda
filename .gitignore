@@ -13,4 +13,4 @@ Thumbs.db
 
 # Logs and Temporary files
 *.log
-data/*
+data/
