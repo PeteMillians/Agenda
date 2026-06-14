@@ -1,7 +1,23 @@
 {
+  "name": "agenda",
+  "version": "1.0.0",
+  "description": "A dynamic and interactive agenda that integrates with Google Calendar, Gmail, and a built-in to-do list.",
+  "main": "server.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
   "dependencies": {
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
-    "googleapis": "^173.0.0"
+    "googleapis": "^173.0.0",
+    "pg": "^8.21.0",
+    "sequelize": "^3.35.1"
   }
 }
