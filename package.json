@@ -1,7 +1,8 @@
 {
-  "name": "agenda",
+  "name": "agenda-desktop",
   "version": "1.0.0",
-  "description": "A dynamic and interactive agenda that integrates with Google Calendar, Gmail, and a built-in to-do list.",
+  "description": "Desktop application for managing calendar, email, and tasks.",
+  "type": "module",
   "main": "index.js",
   "directories": {
     "doc": "docs"
@@ -9,11 +10,26 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node index.js"
+    "dev:client": "cd client && npm run dev",
+    "electron:start": "node electron/main.js",
+    "dev": "concurrently \"npm run dev:client\" \"npm run electron:start\"",
+    "build:client": "npm run build:client",
+    "build:electron": "electron-builder --win --mac --linux",
+    "install": "npm install && npm run dev"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
   "dependencies": {
+    "@/components": "react",
+    "axios": "^1.6.7",
+    "electron": "^30.0.1",
+    "typescript": "^5.2.2"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.63",
+    "@types/react-dom": "^18.2.49",
+    "concurrently": "^8.2.2",
+    "typescript": "^5.2.2",
+    "vite": "^5.2.0",
+    "electron-builder": "^24.9.1",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "googleapis": "^173.0.0",
