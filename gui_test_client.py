@@ -1,13 +1,14 @@
-// ================================================
-// gui_test_client.py (CLI GUI)
-// A command-line interface to interact with the ToDo Service layer for testing purposes.
-// ================================================
+# // ================================================
+# // gui_test_client.py (CLI GUI)
+# // A command-line interface to interact with the ToDo Service layer for testing purposes.
+# // ================================================
 
 import uuid
 from datetime import datetime, timedelta
-# Import the core service functions we just built!
-from src.services.todoService import createTodo, syncFromCalendar, syncFromEmail, getOverdueTasks 
+import requests # <-- NEW: Need to use a library for HTTP calls
 
+# Define the base URL of your running backend server
+BASE_URL = "http://localhost:3000/api/v1/todos"
 def display_menu():
     print("\n" + "="*50)
     print("           ✨ To-Do Manager CLI Test ✨")
@@ -35,15 +36,22 @@ def run_manual_task():
             print("⚠️ Invalid date format. Using null due date.")
 
     try:
-        new_task = createTodo({ 
-            title=title, 
-            description=description, 
-            due_date=due_date, 
-            user_id=user_id 
-        });
-        print(f"\n✅ SUCCESS! Task created and logged to service layer: {new_task['todo_id']}")
-    except Exception as e:
-        print(f"❌ FAILED TO CREATE TASK: {e}")
+        payload = {
+            "title": title,
+            "description": description,
+            "due_date": due_date_str,
+            "source": "MANUAL" # Must explicitly set source for the API
+        }
+        response = requests.post(BASE_URL, json=payload)
+        data = response.json()
+
+        if response.status_code == 201:
+            print(f"\n✅ SUCCESS! Task created and logged to service layer: {data['todo_id']}")
+        else:
+            print(f"❌ FAILED TO CREATE TASK (Status {response.status_code}): {data.get('message', 'Unknown error')}")
+
+    except requests.exceptions.ConnectionError:
+        print("\n🚨 CONNECTION ERROR: Could not connect to the backend server. Is Node.js running?")
 
 
 def run_calendar_sync():
@@ -53,12 +61,12 @@ def run_calendar_sync():
         'summary': 'Quarterly Review Meeting',
         'location': 'Zoom Room A',
         'start': {'dateTime': (datetime.now() + timedelta(days=5)).isoformat()}, # 5 days from now
-        'user_id': "fake-user-123"
     }
     print("Simulating incoming calendar data...")
     try:
-        task = syncFromCalendar(mock_event);
-        print(f"\n✅ SYNC COMPLETE. Task status set to {task['status']} with source: {task['source']}")
+        print("⚠️ NOTE: Calendar Sync requires a new dedicated API endpoint on the Node.js server.")
+        # Example placeholder for future implementation:
+        # response = requests.post(BASE_URL + "/calendar", json=mock_event)
     except Exception as e:
         print(f"❌ CALENDAR SYNC FAILED: {e}")
 
@@ -70,12 +78,11 @@ def run_email_sync():
         'sender': 'client@company.com',
         'subject': 'Follow up on Q3 Report',
         'snippet': 'Please ensure all data points are validated before EOD Friday.',
-        'user_id': "fake-user-123"
     }
     print("Simulating incoming email data...")
     try:
-        task = syncFromEmail(mock_email);
-        print(f"\n✅ SYNC COMPLETE. Task status set to {task['status']} with source: {task['source']}")
+        print("⚠️ NOTE: Email Sync requires a new dedicated API endpoint on the Node.js server.")
+
     except Exception as e:
         print(f"❌ EMAIL SYNC FAILED: {e}")
 
@@ -83,17 +90,17 @@ def run_email_sync():
 def run_overdue_check():
     print("\n--- [OVERDUE TASK CHECK] ---")
     try:
-        overdue = getOverdueTasks();
-        if overdue:
-            print("🚨 ATTENTION! The following tasks are OVERDUE or need attention:")
-            # In a real GUI, we would format and display the list beautifully.
-            for task in overdue:
-                print(f"  - [{task['title']}] (Due: {task['due_date']})")
-        else:
-            print("👍 All tasks are up to date! No immediate action required.")
+        response = requests.get(f"{BASE_URL}?status=PENDING&due_before={datetime.now().strftime('%Y-%m-%d')}")
+        data = response.json()
 
-    except Exception as e:
-        print(f"❌ OVERDUE CHECK FAILED: {e}")
+        if data and 'message' in data:
+            print("✅ SUCCESS! Overdue check simulated successfully.")
+            print(f"Received status: {data['message']}")
+        else:
+             print("👍 All tasks are up to date! No immediate action required (or API returned no data).")
+
+    except requests.exceptions.ConnectionError:
+        print("\n🚨 CONNECTION ERROR: Could not connect to the backend server. Is Node.js running?")
 
 
 def main():
@@ -116,5 +123,4 @@ def main():
             print("Invalid choice. Please select a number from the menu.")
 
 if __name__ == "__main__":
-    # Note: The service functions are now callable from this standalone script.
     main()
