@@ -4,6 +4,7 @@
 // This file sets up the database connection and ties together models, services, and routes.
 // ================================================
 
+
 const express = require('express');
 const sequelize = require('sequelize'); // Assume Sequelize or similar ORM setup
 const UserModel = require('./src/models/user.model');
@@ -19,12 +20,16 @@ const sequelizeInstance = new sequelize({
 });
 
 // --- 2. MODEL DEFINITION & ASSOCIATION ---
-const User = UserModel.define(sequelizeInstance); // Initialize the model with the instance
-const Todo = TodoModel.define(sequelizeInstance); // Initialize the Todo model explicitly
 
+
+
+// FIX: Define models directly on the sequelize instance, which is the correct Sequelize pattern.
+const User = sequelizeInstance.define('User', UserModel);
+const Todo = sequelizeInstance.define('Todo', TodoModel); // Use the attributes/definition from TodoModel
 // Establish relationships (Crucial Step!)
 User.hasMany(Todo, { foreignKey: 'user_id' });
 // We should export this relationship and use it when querying the DB layer.
+
 
 // --- 3. API ROUTE SETUP ---
 const app = express();
@@ -51,7 +56,9 @@ async function initializeDatabase() {
         
         // 1. Test the creation flow (Model -> Service -> Route)
         const newTodoData = { title: "Test Initial Task", description: "Checking service layer connectivity.", due_date: null };
-        const initialTask = await createTodo({ ...newTodoData, user_id: dummyUser.user_id });
+
+        // FIX: Pass the defined 'Todo' model object to createTodo, and use TodoModel.create with it.
+        const initialTask = await createTodo(Todo, { ...newTodoData, user_id: dummyUser.user_id });
 
         console.log(`✅ Test Task Created Successfully (ID: ${initialTask.todo_id})`);
 

@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const todoService = require('../services/todoService');
+const TodoModel = require('../models/todo.model');
 
 // Middleware for authentication and user context extraction should be applied here.
 
@@ -19,16 +19,27 @@ router.post('/', async (req, res) => {
         }
 
         // Use the service layer to handle all business logic and database interactions
-        const newTodo = await todoService.createTodo({ 
-            ...todoData, 
-            user_id: userId 
-        });
+        const todoService = require('../services/todoService')(TodoModel); 
 
+        // Create the payload for the new ToDo item
+        const payload = {
+            ...todoData,
+            user_id: userId,
+            source: todoData.source || 'MANUAL' // Ensure source is provided
+        };
+
+        // Log the creation of the new ToDo item
+        console.log(`[Route Handler] Creating new ToDo item with payload:`, payload);
+
+        // Create the new ToDo item
+        const newTodo = await todoService.createTodo(payload);
+
+        // Response with the created ToDo item
         res.status(201).json(newTodo);
 
     } catch (error) {
         console.error("Error creating ToDo item:", error);
-        res.status(500).json({ message: "Failed to create To-Do item.", details: error.message });
+        res.status(500).json({ message: "Failed to create To-Do item.", details: error });
     }
 });
 

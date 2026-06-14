@@ -24,11 +24,21 @@ async function getLocalTodo(uniqueId, sourceType) {
 class TodoService {
     constructor(TodoModel) {
         // Store the model instance passed during initialization
+         if (!TodoModel) {
+            console.error("[FATAL] TodoService initialized with an invalid or incomplete TodoModel dependency.");
+            // In a real application, you might throw an error here to prevent usage.
+        }
         this.TodoModel = TodoModel;
     }
+
     /**
-     * Core creation logic, enforcing metadata requirements (Phase 1).
-     */
+    * Creates a new ToDo item in the database.
+    * @param {object} todoData - The data for the new ToDo item.
+    * @param {string} todoData.title - The title of the task.
+    * @param {string} [todoData.status] - Optional status (e.g., PENDING).
+    * @param {string} user_id - The ID of the user creating the item.
+    * @returns {Promise<object>} A promise that resolves to the created ToDo object.
+    */
     async createTodo({ title, description = '', due_date, user_id, source }) {
         // ... validation checks on input data ...
 
