@@ -1,42 +1,54 @@
 const express = require('express');
 const router = express.Router();
-const todoController = require('../controllers/todoController');
+const todoService = require('../services/todoService');
 
-// --- Middleware Placeholder ---
-// IMPORTANT: You must implement this middleware to validate the Bearer token 
-// and attach user information (like user_id) to req.user, as required by TODO_DESIGN.md.
-const authenticateToken = (req, res, next) => {
-    /**
-     * Middleware function to authenticate a user based on a Bearer token.
-     * @param {Object} req - The request object.
-     * @param {Object} res - The response object.
-     * @param {Function} next - The next middleware function in the stack.
-     */
+// Middleware for authentication and user context extraction should be applied here.
 
-    console.log("Authentication middleware placeholder executed.");
-    // For testing Phase 1 without full auth setup, we mock a user ID:
-    req.user = { id: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11' }; // Mock UUID
-    next();
-};
+/** 
+ * POST /api/v1/todos 
+ * Endpoint to create a new ToDo item (typically from user input).
+ */
+router.post('/', async (req, res) => {
+    try {
+        // In a real app, the user_id would come from an authenticated middleware token.
+        const userId = "fake-user-123"; 
+        const todoData = req.body;
 
-// --- API Endpoints ---
+        if (!todoData || !todoData.title) {
+            return res.status(400).json({ error: "Missing required title for the ToDo item." });
+        }
 
-// GET /api/v1/todos - Retrieve all tasks (supports filtering)
-router.get('/', 
-    authenticateToken, 
-    todoController.getTodos
-);
+        // Use the service layer to handle all business logic and database interactions
+        const newTodo = await todoService.createTodo({ 
+            ...todoData, 
+            user_id: userId 
+        });
 
-// POST /api/v1/todos - Create a new task
-router.post('/', 
-    authenticateToken, 
-    todoController.createTodo
-);
+        res.status(201).json(newTodo);
 
-// PUT /api/v1/todos/:todo_id - Update an existing task
-router.put('/:todo_id', 
-    authenticateToken, 
-    todoController.updateTodo
-);
+    } catch (error) {
+        console.error("Error creating ToDo item:", error);
+        res.status(500).json({ message: "Failed to create To-Do item.", details: error.message });
+    }
+});
+
+/** 
+ * GET /api/v1/todos 
+ * Endpoint to fetch the list of tasks (supports query parameters for filtering).
+ */
+router.get('/', async (req, res) => {
+    // Extract filters from request query params (e.g., ?status=PENDING&due_before=2026-07-30)
+    const statusFilter = req.query.status; 
+
+    try {
+        // In a real implementation, we would call todoService.getList(statusFilter);
+        console.log(`[Route Handler] Retrieving todos for filter: ${statusFilter || 'all'}`);
+        res.status(200).json({ message: `Successfully fetched list of tasks filtered by ${statusFilter || 'all'} (API Placeholder)` });
+
+    } catch (error) {
+        console.error("Error fetching ToDo items:", error);
+        res.status(500).json({ message: "Failed to retrieve To-Do list." });
+    }
+});
 
 module.exports = router;
