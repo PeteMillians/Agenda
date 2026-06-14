@@ -6,10 +6,10 @@
 
 const express = require('express');
 const sequelize = require('sequelize'); // Assume Sequelize or similar ORM setup
-const UserModel = require('./models/user.model');
-const TodoModel = require('./models/todo.model');
-const todoRoutes = require('./routes/todoRoutes');
-const { createTodo, syncTodoFromSource } = require('./services/todoService');
+const UserModel = require('./src/models/user.model');
+const TodoModel = require('./src/models/todo.model');
+const todoRoutes = require('./src/routes/todoRoutes');
+const { createTodo, syncTodoFromSource } = require('./src/services/todoService');
 
 
 // --- 1. DATABASE INITIALIZATION (Simulated) ---
@@ -20,10 +20,10 @@ const sequelizeInstance = new sequelize({
 
 // --- 2. MODEL DEFINITION & ASSOCIATION ---
 const User = UserModel.define(sequelizeInstance); // Initialize the model with the instance
-// NOTE: ToDoModel would also be initialized here in reality, but we keep it separate for clarity.
+const Todo = TodoModel.define(sequelizeInstance); // Initialize the Todo model explicitly
 
 // Establish relationships (Crucial Step!)
-User.hasMany(TodoModel, { foreignKey: 'user_id' });
+User.hasMany(Todo, { foreignKey: 'user_id' });
 // We should export this relationship and use it when querying the DB layer.
 
 // --- 3. API ROUTE SETUP ---
