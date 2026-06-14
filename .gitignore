@@ -1,4 +1,4 @@
-/node_modules# Dependencies and Build Artifacts
+# Dependencies and Build Artifacts
 node_modules/
 dist/
 build/
@@ -13,3 +13,4 @@ Thumbs.db
 
 # Logs and Temporary files
 *.log
+data/
