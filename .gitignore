@@ -1,0 +1,18 @@
+# Dependencies and Build Artifacts
+node_modules/
+dist/
+build/
+
+# Environment Variables and Secrets (CRITICAL)
+.env
+*.pem
+
+# Operating System Files
+.DS_Store
+Thumbs.db
+
+# Logs and Temporary files
+*.log
+data/
+# Windows download markers
+*:Zone.Identifier

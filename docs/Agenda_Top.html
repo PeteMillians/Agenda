@@ -1,0 +1,838 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Agenda — Architecture & Engineering Specification</title>
+<style>
+:root{
+ --bg:#0a0f1a;--panel:#111a2a;--panel2:#152136;--line:#263650;--text:#e8eef8;--muted:#9cabc2;
+ --cyan:#55d6e8;--blue:#78a9ff;--violet:#c5a3ff;--green:#65dfae;--amber:#ffc66d;--red:#ff858e;
+ --code:#08101c;--shadow:0 18px 55px rgba(0,0,0,.25);--radius:18px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:90px}
+body{margin:0;background:radial-gradient(ellipse at 15% 0%,#122642 0,transparent 38%),var(--bg);color:var(--text);font:15px/1.68 Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+a{color:var(--cyan);text-decoration:none}a:hover{text-decoration:underline}
+code,pre,.mono{font-family:ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace}
+code{font-size:.91em;color:#b9d9ff;background:#0a1322;padding:.15em .35em;border-radius:5px}
+pre{overflow:auto;background:var(--code);border:1px solid var(--line);border-radius:12px;padding:18px;color:#d5e5f8;font-size:12.5px;line-height:1.65;tab-size:2}
+pre code{padding:0;background:none;color:inherit}
+h1,h2,h3,h4{line-height:1.22;letter-spacing:-.025em}
+h1{font-size:clamp(2.5rem,5.8vw,5.2rem);margin:.5rem 0 1rem;max-width:950px}
+h2{font-size:clamp(1.6rem,3vw,2.35rem);margin:0 0 1.1rem}
+h3{font-size:1.2rem;margin:1.5rem 0 .6rem}
+h4{font-size:1rem;margin:1rem 0 .4rem}
+p{margin:.55rem 0 1rem;color:#c5d0e0}
+ul,ol{padding-left:1.3rem;color:#c5d0e0}
+li{margin:.32rem 0}
+hr{border:0;border-top:1px solid var(--line);margin:1.6rem 0}
+.wrap{max-width:1240px;margin:auto;padding:0 28px}
+.topbar{position:sticky;top:0;z-index:10;backdrop-filter:blur(18px);background:#0a0f1add;border-bottom:1px solid #263650aa}
+.topbar-inner{display:flex;align-items:center;justify-content:space-between;gap:18px;min-height:62px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:800;letter-spacing:.04em}
+.brand-mark{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,var(--cyan),var(--violet));display:grid;place-items:center;color:#07111c;font-weight:900}
+.nav{display:flex;gap:15px;overflow:auto;white-space:nowrap;font-size:12px;color:var(--muted)}
+.hero{padding:84px 0 54px}
+.eyebrow{color:var(--cyan);text-transform:uppercase;letter-spacing:.19em;font-size:11px;font-weight:800}
+.subtitle{font-size:1.18rem;max-width:820px;color:#b5c5db}
+.meta{display:flex;gap:8px;flex-wrap:wrap;margin:25px 0}
+.pill, .tag{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:5px 10px;font-size:11px;font-weight:800;letter-spacing:.04em}
+.pill{background:#121e31;color:#c8d6e9}
+.tag{border-radius:6px;text-transform:uppercase}
+.t-cyan{color:var(--cyan);border-color:#267a8a;background:#0c2932}
+.t-blue{color:var(--blue);border-color:#355a99;background:#111f3a}
+.t-violet{color:var(--violet);border-color:#6c4ba4;background:#251a3d}
+.t-green{color:var(--green);border-color:#286f58;background:#0e2b25}
+.t-amber{color:var(--amber);border-color:#8a642c;background:#302416}
+.t-red{color:var(--red);border-color:#8d3e4a;background:#321922}
+.layout{display:grid;grid-template-columns:250px minmax(0,1fr);gap:30px;padding-bottom:90px}
+.sidebar{align-self:start;position:sticky;top:82px;max-height:calc(100vh - 100px);overflow:auto;border:1px solid var(--line);background:#0e1726cc;border-radius:var(--radius);padding:18px}
+.sidebar h4{color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.15em;margin:0 0 10px}
+.sidebar a{display:block;padding:6px 8px;border-radius:7px;color:#b8c7dc;font-size:12px}
+.sidebar a:hover{background:var(--panel2);text-decoration:none;color:white}
+main{min-width:0}
+section{margin:0 0 58px;scroll-margin-top:90px}
+.section-kicker{font-size:11px;color:var(--muted);letter-spacing:.16em;text-transform:uppercase;margin-bottom:8px}
+.card{background:linear-gradient(180deg,#131e30,#0f1827);border:1px solid var(--line);border-radius:var(--radius);padding:22px;margin:14px 0;box-shadow:var(--shadow)}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.stat{padding:16px;border-radius:14px;border:1px solid var(--line);background:#0d1726}
+.stat b{display:block;font-size:1.5rem;color:var(--cyan)}
+.stat span{font-size:12px;color:var(--muted)}
+.callout{border-left:3px solid var(--cyan);padding:13px 16px;background:#10232d;border-radius:0 10px 10px 0;margin:16px 0;color:#d4e7f0}
+.callout.warn{border-color:var(--amber);background:#2b2114}
+.callout.danger{border-color:var(--red);background:#2a1720}
+.callout.good{border-color:var(--green);background:#10261f}
+.diagram{display:flex;flex-direction:column;align-items:center;gap:10px;margin:20px 0}
+.node{width:min(100%,650px);border:1px solid var(--line);background:#111e31;border-radius:13px;padding:15px;text-align:center}
+.node strong{display:block;color:#fff}
+.node small{color:var(--muted)}
+.arrow{color:var(--cyan);font-size:22px;line-height:1}
+.node-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;width:100%}
+.node-row .node{width:100%}
+table{width:100%;border-collapse:collapse;margin:15px 0;font-size:13px}
+th,td{border-bottom:1px solid var(--line);padding:10px 11px;text-align:left;vertical-align:top}
+th{color:#a9c4e5;background:#101b2b;font-size:11px;text-transform:uppercase;letter-spacing:.07em}
+td{color:#c4d0df}
+tr:hover td{background:#111c2c}
+.endpoint{display:grid;grid-template-columns:78px minmax(0,1fr);gap:12px;align-items:start;border-bottom:1px solid #22314a;padding:12px 0}
+.method{font:800 10px ui-monospace,monospace;border-radius:6px;text-align:center;padding:5px 4px}
+.get{color:var(--green);background:#103126}.post{color:var(--blue);background:#122746}.patch{color:var(--amber);background:#332716}.delete{color:var(--red);background:#351921}
+.endpoint code{word-break:break-word}
+.endpoint p{font-size:12px;margin:4px 0;color:var(--muted)}
+details{border:1px solid var(--line);border-radius:12px;margin:10px 0;background:#0e1725}
+summary{cursor:pointer;padding:13px 15px;color:#d8e5f6;font-weight:700}
+details>div{padding:0 15px 15px}
+footer{border-top:1px solid var(--line);padding:25px 0 45px;color:var(--muted);font-size:12px}
+.checklist{list-style:none;padding:0}
+.checklist li{padding-left:27px;position:relative}
+.checklist li:before{content:"□";position:absolute;left:0;color:var(--cyan);font-size:18px;top:-3px}
+.small{font-size:12px;color:var(--muted)}
+@media(max-width:900px){.layout{grid-template-columns:1fr}.sidebar{position:relative;top:0;max-height:none}.nav{display:none}.grid3{grid-template-columns:1fr}.node-row{grid-template-columns:1fr}.hero{padding-top:50px}}
+@media(max-width:600px){.wrap{padding:0 16px}.grid{grid-template-columns:1fr}.card{padding:16px}.endpoint{grid-template-columns:62px minmax(0,1fr)}pre{font-size:11px}}
+@media print{body{background:white;color:#111}.topbar,.sidebar{display:none}.layout{display:block}.card,details,.node{background:white;border-color:#bbb;box-shadow:none;break-inside:avoid}p,li,td{color:#222}h1,h2,h3,strong{color:#111}pre{white-space:pre-wrap;background:#f5f5f5;color:#111}a{color:#111}.hero{padding:30px 0}}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="wrap topbar-inner">
+    <div class="brand"><span class="brand-mark">A</span><span>AGENDA <span style="color:var(--muted);font-weight:500">/ ENGINEERING SPEC</span></span></div>
+    <nav class="nav"><a href="#overview">Overview</a><a href="#architecture">Architecture</a><a href="#api">API</a><a href="#messaging">Messaging</a><a href="#sync">Sync</a><a href="#testing">Testing</a><a href="#roadmap">Roadmap</a></nav>
+  </div>
+</header>
+<div class="wrap hero">
+  <div class="eyebrow">Technical design document · v1.0-draft</div>
+  <h1>Agenda<span style="color:var(--cyan)">.</span><br><span style="color:#9fb7d8">Architecture & Engineering Plan</span></h1>
+  <p class="subtitle">A local-first, cross-platform desktop dashboard for calendars, email, tasks, chores, and lists across personal, work, and family spaces, with notifications, built-in widgets, and optional private AI planning.</p>
+  <div class="meta">
+    <span class="pill">Rust · Tauri</span><span class="pill">React · TypeScript</span><span class="pill">Python · FastAPI</span><span class="pill">SQLite</span><span class="pill">Local-first</span>
+    <span class="tag t-green">Decision baseline</span><span class="tag t-amber">Implementation pending</span>
+  </div>
+  <div class="callout"><strong>Document status:</strong> This is a proposed engineering specification, not a description of an implemented or tested system. Endpoint names, event schemas, lifecycle gates, and test targets are design recommendations to validate during implementation.</div>
+  <div class="grid3">
+    <div class="stat"><b>3</b><span>Desktop platforms: Windows, macOS, Linux</span></div>
+    <div class="stat"><b>4</b><span>Core boundaries: local API, spaces, integrations, widgets</span></div>
+    <div class="stat"><b>8</b><span>Implementation phases, one milestone each</span></div>
+  </div>
+</div>
+<div class="wrap layout">
+<aside class="sidebar">
+  <h4>Document map</h4>
+  <a href="#overview">01 · Executive overview</a>
+  <a href="#principles">02 · Design principles</a>
+  <a href="#architecture">03 · System architecture</a>
+  <a href="#runtime">04 · Startup & lifecycle</a>
+  <a href="#domain">05 · Domain model</a>
+  <a href="#security">06 · Security model</a>
+  <a href="#api">07 · HTTP API catalogue</a>
+  <a href="#contracts">08 · API contracts</a>
+  <a href="#messaging">09 · Messaging & jobs</a>
+  <a href="#sync">10 · Calendar synchronization</a>
+  <a href="#email">11 · Email integration</a>
+  <a href="#widgets">12 · Widget system</a>
+  <a href="#ai">13 · Local AI planning</a>
+  <a href="#storage">14 · Persistence & backup</a>
+  <a href="#observability">15 · Logging & diagnostics</a>
+  <a href="#testing">16 · Test strategy & coverage</a>
+  <a href="#lifecycle">17 · Lifecycle phases</a>
+  <a href="#roadmap">18 · Milestones & gates</a>
+  <a href="#risks">19 · Risks & decisions</a>
+  <a href="#acceptance">20 · Release acceptance</a>
+</aside>
+<main>
+<section id="overview">
+  <div class="section-kicker">01 / Executive overview</div><h2>What we are building</h2>
+  <p>Agenda is a native-feeling desktop application with a local service layer that lets one person run their life from a single dashboard. It organizes <strong>spaces</strong> such as Personal, Work, and Family, each with its own events, tasks, chores, lists, and people. It pulls in Google and Microsoft calendars and mail, and it keeps all data on the user's computer.</p>
+  <p>The first release has one owner per installation. Sharing with other people happens through the providers: a shared Google or Microsoft family calendar attached to the Family space shows everyone's events, and household members can be assigned chores as <em>people</em> without needing an Agenda login. Real multi-person sharing across devices needs a sync server and is deferred to a separately specified <a href="#security-future">shared mode</a>.</p>
+  <div class="grid">
+    <div class="card"><span class="tag t-cyan">Desktop</span><h3>Native shell, web UI</h3><p>Tauri/Rust manages the app window, the backend sidecar, the per-launch secret, and OS integration. React/TypeScript provides the UI and widget registry.</p></div>
+    <div class="card"><span class="tag t-blue">Service</span><h3>Local API boundary</h3><p>A bundled Python/FastAPI sidecar owns domain rules, authorization, provider integrations, background jobs, and AI proposals.</p></div>
+    <div class="card"><span class="tag t-violet">Data</span><h3>Single-file local database</h3><p>SQLite in WAL mode stores application state, the durable job queue, and the outbox. No database server to install, upgrade, or supervise.</p></div>
+    <div class="card"><span class="tag t-green">Extensibility</span><h3>Typed widget registry</h3><p>Built-in widgets are versioned registry entries with validated configuration. A manifest format for third-party widgets is reserved for later.</p></div>
+  </div>
+  <h3>Non-goals for the first release</h3>
+  <ul>
+    <li>Requiring Docker or a separately installed database.</li>
+    <li>Hosting a cloud service or delivering remote multi-device synchronization.</li>
+    <li>Multiple Agenda login accounts or in-app sharing between people (see future shared mode).</li>
+    <li>Sending email or managing mailboxes; email is read-only triage.</li>
+    <li>Running arbitrary third-party code or launching a public widget marketplace.</li>
+    <li>Letting an LLM execute SQL, call unrestricted tools, or silently apply changes.</li>
+    <li>Supporting providers beyond Google and Microsoft at launch.</li>
+  </ul>
+</section>
+
+<section id="principles">
+  <div class="section-kicker">02 / Design principles</div><h2>Constraints that shape implementation</h2>
+  <table><thead><tr><th>Principle</th><th>Engineering consequence</th></tr></thead><tbody>
+  <tr><td>Local-first</td><td>Core tasks, local events, dashboard configuration, and cached provider data remain usable offline. Provider writes wait in a durable queue.</td></tr>
+  <tr><td>Authorization by default</td><td>Every domain query and command resolves the caller from the local session and is scoped to a space the caller can access.</td></tr>
+  <tr><td>Explicit ownership</td><td>The owner holds identity and provider credentials; spaces own records; dashboard profiles only arrange views.</td></tr>
+  <tr><td>Provider adapters</td><td>Google and Microsoft APIs stay behind a common application interface; provider-specific behavior remains explicit.</td></tr>
+  <tr><td>Polling, not push</td><td>A local app has no public HTTPS endpoint for webhooks, so provider changes are detected by incremental polling with sync tokens or delta links.</td></tr>
+  <tr><td>Durable asynchronous work</td><td>Jobs are persisted, idempotent where possible, retryable, observable, and safe to resume after a restart.</td></tr>
+  <tr><td>Human approval for AI</td><td>AI returns validated proposals. The application, not the model, authorizes and commits changes.</td></tr>
+  <tr><td>Build only what v1 uses</td><td>Widgets are a typed in-code registry, not a plugin system; roles and memberships exist in the schema but v1 ships only the owner role.</td></tr>
+  <tr><td>Future network compatibility</td><td>Use stable UUIDs, explicit revisions, service-layer operations, and an outbox change log. Do not assume a shared database file is a sync protocol.</td></tr>
+  </tbody></table>
+</section>
+
+<section id="architecture">
+  <div class="section-kicker">03 / System architecture</div><h2>Components and trust boundaries</h2>
+  <div class="diagram">
+    <div class="node"><strong>Agenda desktop shell · Tauri / Rust</strong><small>Window lifecycle · sidecar supervision · per-launch secret · OS notifications · system browser for OAuth</small></div>
+    <div class="arrow">↕ <small>Tauri IPC</small></div>
+    <div class="node"><strong>Frontend · React + TypeScript + Vite</strong><small>Dashboard layouts · widget registry · space switching · accessible UI</small></div>
+    <div class="arrow">↕ <small>loopback HTTP + per-launch bearer secret</small></div>
+    <div class="node"><strong>Backend sidecar · Python + FastAPI</strong><small>API routes → application services → domain rules → repositories · in-process job workers</small></div>
+    <div class="node-row">
+      <div class="node"><strong>SQLite (WAL)</strong><small>Single file in the OS app-data directory: state, migrations, jobs, outbox</small></div>
+      <div class="node"><strong>Provider adapters</strong><small>Google / Microsoft OAuth, calendar delta polling, event writes, mail headers</small></div>
+      <div class="node"><strong>Optional local AI</strong><small>Ollama or llama.cpp behind provider interface</small></div>
+    </div>
+  </div>
+  <h3>Recommended repository layout</h3>
+<pre><code>agenda/
+├── apps/
+│   └── desktop/
+│       ├── src/                    # React + TypeScript
+│       │   ├── api/                 # generated client from OpenAPI
+│       │   └── widgets/             # built-in widgets + typed registry
+│       ├── src-tauri/              # Rust shell, sidecar lifecycle, launch secret
+│       └── package.json
+├── services/
+│   └── backend/
+│       ├── app/
+│       │   ├── api/v1/routes/
+│       │   ├── core/               # config, security, lifecycle
+│       │   ├── domain/              # spaces, people, events, tasks, lists
+│       │   ├── application/         # use cases and transaction boundaries
+│       │   ├── repositories/
+│       │   ├── integrations/
+│       │   │   ├── google/          # calendar + gmail adapters
+│       │   │   ├── microsoft/       # graph calendar + mail adapters
+│       │   │   └── sync/            # polling scheduler, mapping, conflicts
+│       │   ├── jobs/                # queue, leases, handlers, outbox drain
+│       │   ├── ai/                  # providers, context, proposals
+│       │   └── main.py
+│       ├── migrations/
+│       ├── tests/
+│       └── pyproject.toml
+├── packages/
+│   ├── contracts/                   # OpenAPI-generated TS types
+│   └── widget-sdk/                  # future, not required for v1
+├── packaging/                       # sidecar build + signing scripts per OS
+├── docs/
+│   ├── adr/
+│   ├── api/
+│   └── operations/
+└── README.md</code></pre>
+  <div class="callout"><strong>Deep dive:</strong> process boundaries, the Tauri IPC and loopback-HTTP channels, the startup handshake, and a hop-by-hop request trace are in the <a href="Agenda_Architecture.html">component &amp; IPC map →</a></div>
+  <div class="callout good"><strong>Dependency direction:</strong> API routes call application services. Application services depend on domain interfaces and repositories. Provider SDKs, SQLite, and model runtimes are infrastructure adapters. Domain logic should not import FastAPI route modules or provider SDKs.</div>
+  <h3>Technology choices</h3>
+  <table><thead><tr><th>Layer</th><th>Choice</th><th>Notes</th></tr></thead><tbody>
+  <tr><td>Desktop</td><td>Tauri + Rust</td><td>Native shell, sidecar supervision, launch-secret generation, platform integrations.</td></tr>
+  <tr><td>UI</td><td>React + TypeScript + Vite</td><td>Component-based dashboard and widget registry; API types generated from OpenAPI.</td></tr>
+  <tr><td>Backend</td><td>Python + FastAPI + Pydantic</td><td>Typed validation, OpenAPI schema, async I/O for provider integrations.</td></tr>
+  <tr><td>Database</td><td>SQLite 3 (WAL mode, ≥ 3.35)</td><td>Single file, no service to install or upgrade. Transactions, foreign keys, partial indexes, and <code>RETURNING</code>. Ships with the bundled Python.</td></tr>
+  <tr><td>ORM / migrations</td><td>SQLAlchemy 2 (aiosqlite) + Alembic</td><td>Versioned, reviewed migrations; Alembic batch mode works around SQLite's limited <code>ALTER TABLE</code>.</td></tr>
+  <tr><td>Sidecar packaging</td><td>PyInstaller or Nuitka (open decision)</td><td>One executable per OS, registered as a Tauri <code>externalBin</code> and signed/notarized with the app.</td></tr>
+  <tr><td>Testing</td><td>pytest; Vitest; Playwright</td><td>Unit, contract, integration, UI, and packaged-app smoke tests.</td></tr>
+  <tr><td>Development</td><td>Python venv + Vite dev server + <code>tauri dev</code></td><td>No Docker required; each developer gets a throwaway SQLite file.</td></tr>
+  </tbody></table>
+</section>
+
+<section id="runtime">
+  <div class="section-kicker">04 / Startup & lifecycle</div><h2>Desktop and backend lifecycle</h2>
+  <ol>
+    <li><strong>Launch:</strong> Tauri initializes platform state, reads non-secret configuration, and generates a random 256-bit launch secret held only in memory.</li>
+    <li><strong>Backend spawn:</strong> start the packaged Python sidecar with a minimal environment and pass the launch secret over stdin. The sidecar binds to <code>127.0.0.1</code> on a free port and reports the port back on stdout.</li>
+    <li><strong>Database readiness:</strong> the sidecar opens (or creates) the SQLite file in the app-data directory and checks its schema version. If migrations are pending, it first writes a pre-migration snapshot, then migrates. A database newer than the app is refused with a clear message, not opened.</li>
+    <li><strong>Health handshake:</strong> Tauri polls <code>/health/ready</code> with a bounded timeout. On failure it shows recovery guidance (restore a backup, open the data folder, export diagnostics) rather than a blank window.</li>
+    <li><strong>Setup or unlock:</strong> on first run, show setup (owner name, default spaces). If app lock is enabled, show the unlock screen; otherwise open the last-used dashboard profile.</li>
+    <li><strong>Resume work:</strong> workers reclaim expired leases, resume retryable jobs, drain the outbox, and schedule an immediate provider poll to catch up on changes made while the app was closed.</li>
+    <li><strong>Shutdown:</strong> stop accepting new work, allow bounded completion, release leases, checkpoint the WAL, close connections, terminate the sidecar gracefully, then force-stop only after timeout.</li>
+  </ol>
+  <h3>Health endpoints</h3>
+  <div class="endpoint"><span class="method get">GET</span><div><code>/health/live</code><p>Process is alive. No dependency checks.</p></div></div>
+  <div class="endpoint"><span class="method get">GET</span><div><code>/health/ready</code><p>Database open, migrations applied, workers started. Return 503 if not ready.</p></div></div>
+  <div class="callout warn"><strong>One sidecar per database:</strong> the sidecar takes an exclusive lock file next to the database at startup. A second app instance focuses the existing window instead of starting another backend against the same file.</div>
+</section>
+
+<section id="domain">
+  <div class="section-kicker">05 / Domain model</div><h2>Data model and ownership</h2>
+  <table><thead><tr><th>Entity</th><th>Key fields / relationships</th><th>Rules</th></tr></thead><tbody>
+  <tr><td><code>users</code></td><td>id, display_name, app_lock_hash?, created_at</td><td>v1 has exactly one row: the owner. It is still a table so shared mode can add accounts without re-keying data. <code>app_lock_hash</code> is Argon2id, null when app lock is off.</td></tr>
+  <tr><td><code>spaces</code></td><td>id, owner_user_id, name, type, color, archived_at?, revision</td><td>Personal, work, family, or custom. The unit of organization and authorization.</td></tr>
+  <tr><td><code>space_memberships</code></td><td>space_id, user_id, role</td><td>Unique (space_id, user_id). v1 creates one owner row per space; editor/viewer are reserved for shared mode.</td></tr>
+  <tr><td><code>people</code></td><td>id, space_id, display_name, color, revision</td><td>Household or team members who can be assigned tasks and chores. Not login accounts.</td></tr>
+  <tr><td><code>dashboard_profiles</code></td><td>id, user_id, name, layout_json, selected_space_ids</td><td>View configuration only; never a data ownership boundary. <code>layout_json</code> is size-bounded and validated by the frontend registry.</td></tr>
+  <tr><td><code>external_accounts</code></td><td>id, user_id, provider, provider_subject, granted_scopes, credential_ref, status</td><td>Unique (provider, provider_subject). Refresh tokens live in the OS credential vault; only a reference is stored here.</td></tr>
+  <tr><td><code>calendar_sources</code></td><td>id, external_account_id, space_id, provider_calendar_id, access_role, sync_mode, sync_cursor, sync_state, last_synced_at</td><td>Each provider calendar is attached to exactly one space, and its events belong to that space. <code>sync_mode</code> is <code>read_only</code> or <code>two_way</code>; two-way requires writer access at the provider.</td></tr>
+  <tr><td><code>events</code></td><td>id, space_id, calendar_source_id?, title, description, location, start_at/end_at <em>or</em> start_date/end_date, timezone, rrule?, series_id?, original_start?, status, revision, deleted_at?</td><td>Stable Agenda UUID. Local-only events have no source. All-day events use dates. A recurring series stores an RRULE; a modified or cancelled occurrence is an exception row with <code>series_id</code> and <code>original_start</code>.</td></tr>
+  <tr><td><code>event_mappings</code></td><td>event_id, calendar_source_id, provider_event_id, etag/change_key, last_synced_revision</td><td>The only link between an Agenda event and a provider event. Unique (calendar_source_id, provider_event_id).</td></tr>
+  <tr><td><code>sync_conflicts</code></td><td>id, event_id, calendar_source_id, snapshots, revisions, status, resolution</td><td>See the conflict model in section 10.</td></tr>
+  <tr><td><code>tasks</code></td><td>id, space_id, created_by, assignee_person_id?, title, notes, due_at? or due_date?, rrule?, status, revision</td><td>Space owns task. Assignee must be a person in the same space. Repeating chores use an RRULE; completing one creates the next occurrence.</td></tr>
+  <tr><td><code>lists / list_items</code></td><td>space_id, list_id, text, checked, position, revision</td><td>Same space access model as tasks.</td></tr>
+  <tr><td><code>email_messages</code></td><td>id, external_account_id, provider_message_id, thread_id, sender, subject, received_at, is_unread, labels</td><td>Header cache only. Bodies are fetched on demand and never persisted.</td></tr>
+  <tr><td><code>notifications</code></td><td>id, user_id, kind, object_type/id, title, fire_at, delivered_at?, read_at?, dismissed_at?</td><td>In-app inbox and OS notification record; recalculated when the source object changes.</td></tr>
+  <tr><td><code>notification_preferences</code></td><td>user_id, space_id?, channel, rules_json, quiet_hours</td><td>Per-space overrides allowed; quiet hours apply to OS notifications only.</td></tr>
+  <tr><td><code>jobs</code></td><td>id, kind, payload, schema_version, state, attempts, available_at, lease_until, idempotency_key?, last_error_category</td><td>Durable queue; payload schema versioned.</td></tr>
+  <tr><td><code>outbox</code></td><td>id, event_type, schema_version, envelope_json, created_at, processed_at?</td><td>Written in the same transaction as the state change; drained by the worker.</td></tr>
+  <tr><td><code>proposals</code></td><td>id, requested_by, target_space_id, status, proposal_json, expires_at</td><td>AI suggestions are pending until reviewed; reauthorize on apply.</td></tr>
+  <tr><td><code>audit_log</code></td><td>id, actor_user_id, space_id?, action, object_type/id, timestamp</td><td>Record consequential operations (deletes, provider writes, AI applies, account connects); redact secrets.</td></tr>
+  </tbody></table>
+  <h3>Example SQLite setup and constraints</h3>
+<pre><code>-- Applied on every connection
+PRAGMA journal_mode = WAL;
+PRAGMA foreign_keys = ON;
+PRAGMA busy_timeout = 5000;
+PRAGMA synchronous = NORMAL;
+
+CREATE UNIQUE INDEX uq_membership
+  ON space_memberships(space_id, user_id);
+
+CREATE UNIQUE INDEX uq_provider_event
+  ON event_mappings(calendar_source_id, provider_event_id);
+
+CREATE UNIQUE INDEX uq_job_idempotency
+  ON jobs(kind, idempotency_key) WHERE idempotency_key IS NOT NULL;
+
+CREATE INDEX ix_jobs_claim
+  ON jobs(state, available_at);
+
+-- Every space-owned row has a NOT NULL space_id with a foreign key to spaces.
+-- SQLite has no row-level security: authorization lives in application services.</code></pre>
+  <p class="small">Store UUIDs as TEXT and timestamps as ISO 8601 UTC TEXT, plus an IANA time-zone identifier for event display and recurrence. All-day events are dates, not midnight UTC timestamps. Recurrences are expanded for a requested window at read time, not stored as individual rows.</p>
+</section>
+
+<section id="security">
+  <div class="section-kicker">06 / Security model</div><h2>Local identity, authorization, secrets, and trust</h2>
+  <h3>Local identity and app lock</h3>
+  <ul>
+    <li>v1 has a single owner profile created at first run. The operating-system account is the main identity boundary; Agenda does not add a second account system on top of it.</li>
+    <li>Optional app lock: a passphrase hashed with Argon2id (unique salt, calibrated cost), throttled unlock attempts with increasing delay, and auto-lock after an idle period. While locked, every domain route returns <code>401 APP_LOCKED</code>.</li>
+    <li>App lock is a privacy screen, not encryption. Anyone who can read the user's files can read the database unless at-rest encryption is adopted (open decision). Recommend OS disk encryption in the setup flow.</li>
+    <li>Never log passphrases, authorization headers, OAuth tokens, email bodies, or model prompts by default.</li>
+  </ul>
+  <h3>Local API boundary</h3>
+  <ul>
+    <li>Tauri passes the per-launch secret to the sidecar over stdin, never on the command line or in environment variables, which other local processes can read. The frontend gets it through a Tauri IPC command and sends it as a bearer token. It lives only in memory and changes every launch.</li>
+    <li>Bind to <code>127.0.0.1</code> on a random port; never <code>0.0.0.0</code>.</li>
+    <li>Reject requests whose <code>Host</code> header is not <code>127.0.0.1:&lt;port&gt;</code> (DNS rebinding). Restrict CORS to the exact Tauri origin.</li>
+    <li>Store provider refresh tokens in Windows Credential Manager, macOS Keychain, or the Linux Secret Service; if no vault is available, refuse to connect accounts rather than fall back to plaintext.</li>
+    <li>Create the database, WAL, and backup files with owner-only permissions.</li>
+    <li>Treat event descriptions, email content, calendar invites, and widget configuration as untrusted input, especially when included in an AI prompt.</li>
+  </ul>
+  <h3>Authorization policy</h3>
+  <p>Every route resolves the actor from the session (in v1, always the owner) and checks access to the target space. Roles exist now so the policy code is written and tested once; in v1 every space has exactly one owner.</p>
+  <table><thead><tr><th>Role</th><th>Read</th><th>Create / edit / delete records</th><th>Space settings & membership</th></tr></thead><tbody>
+  <tr><td>Owner</td><td>All space data</td><td>Yes</td><td>Yes, including archive/delete and role changes</td></tr>
+  <tr><td>Editor <span class="small">(shared mode)</span></td><td>All space data</td><td>Yes: events, tasks, lists, people</td><td>No</td></tr>
+  <tr><td>Viewer <span class="small">(shared mode)</span></td><td>All space data</td><td>No</td><td>No</td></tr>
+  </tbody></table>
+  <div class="callout danger"><strong>Critical:</strong> the frontend is not an authorization boundary. Derive the space from the URL path, verify the target object actually belongs to that space, and never trust user or space IDs supplied in the request body.</div>
+  <h3 id="security-future">Future shared mode</h3>
+  <p>Sharing between people on different devices requires a sync server and a separate specification and threat model: TLS, remote authentication, invitations, revocation, rate limits, server-side authorization, sync conflict policy, and encrypted transport. The <code>users</code> and <code>space_memberships</code> tables, stable UUIDs, revisions, and the outbox are kept so that mode can be added without re-keying data. Do not simply change the local bind address.</p>
+</section>
+
+<section id="api">
+  <div class="section-kicker">07 / HTTP API catalogue</div><h2>Versioned API endpoints</h2>
+  <p>Base path: <code>/api/v1</code>. JSON over HTTP. OpenAPI is the source of truth; TypeScript client types are generated from it.</p>
+  <div class="callout"><strong>Conventions:</strong> every route requires <code>Authorization: Bearer &lt;launch-secret&gt;</code> except <code>/health/*</code> and the OAuth loopback callback. UUID identifiers; ISO 8601 timestamps; list endpoints use cursor pagination; mutation endpoints accept an <code>Idempotency-Key</code> when retrying could duplicate a side effect. Errors use one envelope with a stable code and request ID.</div>
+  <h3>Setup and app lock</h3>
+  <div class="endpoint"><span class="method get">GET</span><div><code>/setup/status</code><p>Whether first-run setup has completed.</p></div></div>
+  <div class="endpoint"><span class="method post">POST</span><div><code>/setup</code><p>Create the owner profile and default spaces (Personal, Work, Family). Allowed once.</p></div></div>
+  <div class="endpoint"><span class="method get">GET</span><div><code>/auth/status</code><p>Whether app lock is enabled and currently locked.</p></div></div>
+  <div class="endpoint"><span class="method post">POST</span><div><code>/auth/unlock</code><p>Verify the app-lock passphrase. Throttled; generic failure message; returns 429 after repeated failures.</p></div></div>
+  <div class="endpoint"><span class="method post">POST</span><div><code>/auth/lock</code><p>Lock immediately.</p></div></div>
+  <div class="endpoint"><span class="method patch">PATCH</span><div><code>/auth/app-lock</code><p>Enable, change, or disable app lock; requires the current passphrase when one is set.</p></div></div>
+  <h3>Profile, spaces, and people</h3>
+  <div class="endpoint"><span class="method get">GET</span><div><code>/users/me</code><p>Read the owner profile.</p></div></div>
+  <div class="endpoint"><span class="method patch">PATCH</span><div><code>/users/me</code><p>Update display name and preferences.</p></div></div>
+  <div class="endpoint"><span class="method get">GET</span><div><code>/spaces</code><p>List spaces the caller can access.</p></div></div>
+  <div class="endpoint"><span class="method post">POST</span><div><code>/spaces</code><p>Create a space; creator becomes owner.</p></div></div>
+  <div class="endpoint"><span class="method get">GET</span><div><code>/spaces/{space_id}</code><p>Read space details after access check.</p></div></div>
+  <div class="endpoint"><span class="method patch">PATCH</span><div><code>/spaces/{space_id}</code><p>Update name, type, color, or settings (owner only).</p></div></div>
+  <div class="endpoint"><span class="method delete">DELETE</span><div><code>/spaces/{space_id}</code><p>Archive a space. Hard delete requires an explicit confirmation flag and detaches its calendar sources first.</p></div></div>
+  <div class="endpoint"><span class="method get">GET</span><div><code>/spaces/{space_id}/people</code><p>List people in a space.</p></div></div>
+  <div class="endpoint"><span class="method post">POST</span><div><code>/spaces/{space_id}/people</code><p>Add a person who can be assigned tasks and chores.</p></div></div>
+  <div class="endpoint"><span class="method patch">PATCH</span><div><code>/people/{person_id}</code><p>Rename or recolor a person.</p></div></div>
+  <div class="endpoint"><span class="method delete">DELETE</span><div><code>/people/{person_id}</code><p>Remove a person; their open tasks become unassigned.</p></div></div>
+  <p class="small">Membership endpoints (<code>/spaces/{space_id}/members</code>) are reserved for shared mode.</p>
+  <h3>Dashboard profiles</h3>
+  <div class="endpoint"><span class="method get">GET</span><div><code>/dashboard-profiles</code><p>List the caller's profiles.</p></div></div>
+  <div class="endpoint"><span class="method post">POST</span><div><code>/dashboard-profiles</code><p>Create a saved dashboard layout.</p></div></div>
+  <div class="endpoint"><span class="method get">GET</span><div><code>/dashboard-profiles/{profile_id}</code><p>Read profile configuration.</p></div></div>
+  <div class="endpoint"><span class="method patch">PATCH</span><div><code>/dashboard-profiles/{profile_id}</code><p>Update layout, widget configuration, or selected spaces, with optimistic concurrency.</p></div></div>
+  <div class="endpoint"><span class="method delete">DELETE</span><div><code>/dashboard-profiles/{profile_id}</code><p>Delete a profile, not its underlying data.</p></div></div>
+  <h3>Events and calendars</h3>
+  <div class="endpoint"><span class="method get">GET</span><div><code>/spaces/{space_id}/events?from=&amp;to=&amp;cursor=</code><p>List events in a bounded date window, with recurrences expanded into occurrences.</p></div></div>
+  <div class="endpoint"><span class="method post">POST</span><div><code>/spaces/{space_id}/events</code><p>Create an event. If the space has a two-way calendar source chosen as the default target, a provider write is queued.</p></div></div>
+  <div class="endpoint"><span class="method get">GET</span><div><code>/events/{event_id}</code><p>Read an event if the caller can access its space.</p></div></div>
+  <div class="endpoint"><span class="method patch">PATCH</span><div><code>/events/{event_id}</code><p>Update with optimistic concurrency via <code>If-Match</code>. For recurring events, a <code>scope</code> of <code>this</code>, <code>following</code>, or <code>all</code> is required. Events from read-only sources return 409.</p></div></div>
+  <div class="endpoint"><span class="method delete">DELETE</span><div><code>/events/{event_id}</code><p>Tombstone the event and queue the provider deletion where applicable; same <code>scope</code> rule for recurring events.</p></div></div>
+  <h3>Provider accounts and sync</h3>
+  <div class="endpoint"><span class="method post">POST</span><div><code>/integrations/{provider}/connect/start</code><p>Begin OAuth (PKCE + state) and return the authorization URL, which Tauri opens in the system browser. Provider is <code>google</code> or <code>microsoft</code>.</p></div></div>
+  <div class="endpoint"><span class="method get">GET</span><div><code>/integrations/{provider}/callback</code><p>Loopback redirect target. Exempt from the bearer secret but accepted only with a matching one-time state; exchanges the code and stores the refresh token in the vault.</p></div></div>
+  <div class="endpoint"><span class="method get">GET</span><div><code>/external-accounts</code><p>List connected accounts, status, and granted scopes.</p></div></div>
+  <div class="endpoint"><span class="method delete">DELETE</span><div><code>/external-accounts/{account_id}</code><p>Revoke the token at the provider, remove the vault entry, and keep or delete imported data as the caller chooses.</p></div></div>
+  <div class="endpoint"><span class="method get">GET</span><div><code>/calendar-sources</code><p>List provider calendars and the space each is attached to.</p></div></div>
+  <div class="endpoint"><span class="method patch">PATCH</span><div><code>/calendar-sources/{source_id}</code><p>Attach to a space, enable/disable, or switch between <code>read_only</code> and <code>two_way</code>.</p></div></div>
+  <div class="endpoint"><span class="method post">POST</span><div><code>/calendar-sources/{source_id}/sync</code><p>Queue an immediate poll; return a job ID.</p></div></div>
+  <div class="endpoint"><span class="method get">GET</span><div><code>/sync/conflicts</code><p>List unresolved sync conflicts.</p></div></div>
+  <div class="endpoint"><span class="method post">POST</span><div><code>/sync/conflicts/{conflict_id}/resolve</code><p>Choose local, provider, or keep-both; apply only after revalidating revisions.</p></div></div>
+  <h3>Email</h3>
+  <div class="endpoint"><span class="method get">GET</span><div><code>/email/summary</code><p>Unread counts per connected mail account.</p></div></div>
+  <div class="endpoint"><span class="method get">GET</span><div><code>/email/messages?account_id=&amp;unread=&amp;cursor=</code><p>List cached message headers, newest first.</p></div></div>
+  <div class="endpoint"><span class="method get">GET</span><div><code>/email/messages/{message_id}/body</code><p>Fetch the body from the provider on demand; return sanitized content; never persist it.</p></div></div>
+  <div class="endpoint"><span class="method post">POST</span><div><code>/email/accounts/{account_id}/sync</code><p>Queue an immediate header poll; return a job ID.</p></div></div>
+  <h3>Tasks, lists, and notifications</h3>
+  <div class="endpoint"><span class="method get">GET</span><div><code>/spaces/{space_id}/tasks</code><p>List tasks with status, due-date, assignee, and cursor filters.</p></div></div>
+  <div class="endpoint"><span class="method post">POST</span><div><code>/spaces/{space_id}/tasks</code><p>Create a task; the assignee must be a person in the same space.</p></div></div>
+  <div class="endpoint"><span class="method patch">PATCH</span><div><code>/tasks/{task_id}</code><p>Update with optimistic concurrency. Completing a repeating chore creates the next occurrence.</p></div></div>
+  <div class="endpoint"><span class="method delete">DELETE</span><div><code>/tasks/{task_id}</code><p>Archive a task.</p></div></div>
+  <div class="endpoint"><span class="method get">GET</span><div><code>/spaces/{space_id}/lists</code><p>List lists within a space.</p></div></div>
+  <div class="endpoint"><span class="method post">POST</span><div><code>/spaces/{space_id}/lists</code><p>Create a list.</p></div></div>
+  <div class="endpoint"><span class="method patch">PATCH</span><div><code>/lists/{list_id}</code><p>Rename, reorder, add, check, or remove items with optimistic concurrency.</p></div></div>
+  <div class="endpoint"><span class="method get">GET</span><div><code>/notifications</code><p>List the caller's notifications.</p></div></div>
+  <div class="endpoint"><span class="method patch">PATCH</span><div><code>/notifications/{notification_id}</code><p>Mark read or dismissed.</p></div></div>
+  <div class="endpoint"><span class="method get">GET</span><div><code>/notification-preferences</code><p>Read reminder rules and quiet hours.</p></div></div>
+  <div class="endpoint"><span class="method patch">PATCH</span><div><code>/notification-preferences</code><p>Update reminder rules and quiet hours.</p></div></div>
+  <h3>Jobs, AI proposals, and operations</h3>
+  <div class="endpoint"><span class="method get">GET</span><div><code>/jobs/{job_id}</code><p>Read job status, progress, and error category.</p></div></div>
+  <div class="endpoint"><span class="method get">GET</span><div><code>/ai/status</code><p>Report whether local AI is configured and ready without exposing sensitive runtime details.</p></div></div>
+  <div class="endpoint"><span class="method post">POST</span><div><code>/spaces/{space_id}/ai/planning-requests</code><p>Request planning for an event/context. Queue a job; return request/job ID.</p></div></div>
+  <div class="endpoint"><span class="method get">GET</span><div><code>/ai/proposals/{proposal_id}</code><p>Read proposal and its validation warnings.</p></div></div>
+  <div class="endpoint"><span class="method post">POST</span><div><code>/ai/proposals/{proposal_id}/approve</code><p>Apply user-approved proposal after rechecking authorization and source revisions.</p></div></div>
+  <div class="endpoint"><span class="method post">POST</span><div><code>/ai/proposals/{proposal_id}/reject</code><p>Reject or dismiss proposal.</p></div></div>
+  <div class="endpoint"><span class="method post">POST</span><div><code>/backups</code><p>Start a backup job to a user-chosen location; return job ID.</p></div></div>
+  <div class="endpoint"><span class="method get">GET</span><div><code>/backups</code><p>List automatic snapshots and recent manual backups (metadata only).</p></div></div>
+  <div class="endpoint"><span class="method post">POST</span><div><code>/backups/restore</code><p>Validate a backup file (integrity check, schema version) and restore it; the sidecar restarts afterwards.</p></div></div>
+  <div class="endpoint"><span class="method get">GET</span><div><code>/diagnostics/bundle</code><p>Export a redacted support bundle.</p></div></div>
+</section>
+
+<section id="contracts">
+  <div class="section-kicker">08 / API contracts</div><h2>Wire formats and error semantics</h2>
+  <h3>Example: create a task</h3>
+<pre><code>POST /api/v1/spaces/8c3.../tasks
+Authorization: Bearer &lt;launch-secret&gt;
+Content-Type: application/json
+Idempotency-Key: 4c8a7e...
+
+{
+  "title": "Take out recycling",
+  "notes": "Blue bin goes to the curb",
+  "due_date": "2026-10-20",
+  "rrule": "FREQ=WEEKLY;BYDAY=TU",
+  "assignee_person_id": "d1f..."
+}
+
+201 Created
+{
+  "data": {
+    "id": "a5e...",
+    "space_id": "8c3...",
+    "title": "Take out recycling",
+    "status": "open",
+    "revision": 1,
+    "created_at": "2026-10-15T18:30:00Z"
+  },
+  "request_id": "req_..."
+}</code></pre>
+  <h3>Standard error envelope</h3>
+<pre><code>{
+  "error": {
+    "code": "SYNC_REVISION_CONFLICT",
+    "message": "The event changed after this version was loaded.",
+    "details": {
+      "resource_id": "event-uuid",
+      "current_revision": 8
+    }
+  },
+  "request_id": "req_..."
+}</code></pre>
+  <table><thead><tr><th>HTTP status</th><th>Use</th></tr></thead><tbody>
+  <tr><td><code>400</code></td><td>Malformed request.</td></tr>
+  <tr><td><code>401</code></td><td>Missing or invalid launch secret, or app is locked (<code>APP_LOCKED</code>).</td></tr>
+  <tr><td><code>403</code></td><td>The caller can see the resource but their role does not allow the action (e.g. a viewer editing in shared mode).</td></tr>
+  <tr><td><code>404</code></td><td>The resource does not exist <em>or</em> the caller cannot access its space. Always 404, never 403, so existence is not revealed.</td></tr>
+  <tr><td><code>409</code></td><td>Revision conflict, duplicate action, write to a read-only source, or invalid state transition.</td></tr>
+  <tr><td><code>422</code></td><td>Schema-valid JSON with invalid field or domain constraints.</td></tr>
+  <tr><td><code>429</code></td><td>Too many unlock attempts.</td></tr>
+  <tr><td><code>503</code></td><td>Required dependency temporarily unavailable (database not ready, provider unreachable for an on-demand fetch).</td></tr>
+  </tbody></table>
+  <h3>Concurrency contract</h3>
+  <p>Mutable resources carry a monotonically increasing application revision. Clients send <code>If-Match</code> with the expected revision. If it has changed, return <code>409</code> with safe metadata for reload/reconciliation. Provider ETags and sync tokens are stored separately from Agenda's revision.</p>
+</section>
+
+<section id="messaging">
+  <div class="section-kicker">09 / Messaging & jobs</div><h2>Internal events, durable jobs, and frontend updates</h2>
+  <p>Use distinct messaging patterns rather than one universal bus:</p>
+  <div class="grid">
+    <div class="card"><span class="tag t-blue">Command</span><h3>Request / response</h3><p>Frontend → REST API → application service. Use for user-initiated reads and writes. Return a resource or accepted job ID.</p></div>
+    <div class="card"><span class="tag t-violet">Durable job</span><h3>SQLite queue</h3><p>Persist work that must survive restarts: provider polls and writes, email header sync, reminders, backups, and AI planning.</p></div>
+    <div class="card"><span class="tag t-cyan">Domain event</span><h3>Outbox-backed event</h3><p>Commit state changes and their outbox rows in one transaction; the worker drains the outbox and processes events idempotently.</p></div>
+    <div class="card"><span class="tag t-green">UI event</span><h3>Live status</h3><p>Poll job and sync status initially. Add Server-Sent Events only when a widget needs live updates.</p></div>
+  </div>
+  <h3>Envelope contract</h3>
+<pre><code>{
+  "event_id": "uuid",
+  "event_type": "calendar.sync.requested",
+  "schema_version": 1,
+  "occurred_at": "2026-10-15T18:30:00Z",
+  "producer": "agenda.api",
+  "correlation_id": "uuid",
+  "causation_id": "uuid-or-null",
+  "actor_user_id": "uuid",
+  "space_id": "uuid-or-null",
+  "aggregate": {
+    "type": "calendar_source",
+    "id": "uuid",
+    "revision": 12
+  },
+  "payload": {}
+}</code></pre>
+  <p class="small">Event payloads must not contain passphrases, OAuth secrets, launch secrets, or email/calendar body content. Version schemas explicitly and support old pending jobs during upgrades.</p>
+  <h3>Initial event types</h3>
+  <table><thead><tr><th>Event type</th><th>Producer</th><th>Consumer / effect</th></tr></thead><tbody>
+  <tr><td><code>task.created</code> / <code>task.changed</code></td><td>Task service</td><td>Reminder recalculation; audit trail.</td></tr>
+  <tr><td><code>event.changed</code></td><td>Calendar service</td><td>Queue provider write for two-way sources; reminder recalculation.</td></tr>
+  <tr><td><code>calendar.sync.requested</code></td><td>API / poll scheduler</td><td>Provider-specific incremental poll.</td></tr>
+  <tr><td><code>calendar.conflict.detected</code></td><td>Sync engine</td><td>Create user-visible conflict and notification.</td></tr>
+  <tr><td><code>email.sync.requested</code></td><td>API / poll scheduler</td><td>Fetch new message headers and unread counts.</td></tr>
+  <tr><td><code>notification.delivery.requested</code></td><td>Reminder planner</td><td>OS notification via Tauri and in-app inbox entry.</td></tr>
+  <tr><td><code>ai.planning.requested</code></td><td>API</td><td>Authorized context builder → model provider → validator → proposal.</td></tr>
+  <tr><td><code>ai.proposal.approved</code></td><td>Approval service</td><td>Reauthorize and apply proposal transactionally; queue follow-up work.</td></tr>
+  </tbody></table>
+  <h3>Job state machine</h3>
+  <p><code>queued → leased → succeeded</code>, with retryable failure returning to <code>queued</code> after backoff. Permanent failures become <code>dead_letter</code>. Cancellation and supersession are explicit states where supported.</p>
+<pre><code>-- Claim one job. Short write transaction; never held across a network call.
+BEGIN IMMEDIATE;
+UPDATE jobs
+   SET state = 'leased', lease_until = :lease_until, attempts = attempts + 1
+ WHERE id = (
+   SELECT id FROM jobs
+    WHERE (state = 'queued' AND available_at &lt;= :now)
+       OR (state = 'leased' AND lease_until &lt; :now)
+    ORDER BY available_at
+    LIMIT 1)
+RETURNING *;
+COMMIT;</code></pre>
+  <ul>
+    <li>Workers run as asyncio tasks inside the single sidecar process, so there are no cross-process claim races. SQLite allows one writer at a time: keep write transactions short.</li>
+    <li>Lease expiry makes interrupted jobs reclaimable after a crash.</li>
+    <li>Use exponential backoff with jitter, honor provider <code>Retry-After</code>, and cap retries.</li>
+    <li>Handlers must be idempotent or record a deduplication key before external side effects.</li>
+    <li>Serialize jobs per calendar source so writes to the same provider event never race.</li>
+    <li>Expose safe status, progress, timestamps, and error category, not raw credentials or provider response dumps.</li>
+  </ul>
+</section>
+
+<section id="sync">
+  <div class="section-kicker">10 / Calendar synchronization</div><h2>Polling, mapping, and two-way sync</h2>
+  <p>Sync ships in two stages: <strong>read-only import</strong> first (Phase 3), then <strong>two-way</strong> writes with conflict handling (Phase 4). A calendar source stays read-only unless the user switches it and the provider grants write access.</p>
+  <h3>Change detection</h3>
+  <ul>
+    <li>Google push channels and Microsoft Graph subscriptions need a public HTTPS endpoint, which a local app does not have. Use incremental polling instead.</li>
+    <li>Google: <code>events.list</code> with <code>syncToken</code>; on <code>410 Gone</code>, discard the token and run a full resync that reconciles by <code>event_mappings</code> without duplicating events.</li>
+    <li>Microsoft Graph: <code>calendarView/delta</code> with the stored <code>deltaLink</code>; on an expired link, full resync the same way.</li>
+    <li>Cadence: every 5 minutes while the app is open, immediately on launch, on window focus after being idle, and right after a local write. Back off on 429/5xx. Nothing syncs while the app is closed.</li>
+  </ul>
+  <h3>Calendar-to-space mapping</h3>
+  <p>When an account is connected, the user picks which provider calendars to import and which space each belongs to (for example, the shared "Family" Google calendar → Family space). Imported events take that space. Moving a source to another space moves its events.</p>
+  <h3>Two-way write sequence</h3>
+  <ol>
+    <li>User edits an event in Agenda. The transaction bumps the event revision and writes an outbox row.</li>
+    <li>The sync worker claims the write job and sends it with the stored ETag/changeKey as a precondition (<code>If-Match</code>).</li>
+    <li>If the provider accepts, store the new ETag and <code>last_synced_revision</code>.</li>
+    <li>If the precondition fails because the provider changed independently, fetch the remote version and store both snapshots as a conflict; do not overwrite silently.</li>
+    <li>Agenda shows local and provider versions. User chooses local, provider, or keep both.</li>
+    <li>Resolution is committed with the expected revisions, and a new idempotent job reconciles the provider and mapping.</li>
+  </ol>
+  <h3>Conflict model</h3>
+<pre><code>SyncConflict {
+  id: UUID
+  event_id: UUID
+  calendar_source_id: UUID
+  local_snapshot: JSON
+  remote_snapshot: JSON
+  local_revision: int
+  remote_version: string | null   # ETag/changeKey
+  detected_at: datetime
+  status: "open" | "resolved" | "superseded"
+  resolution: "keep_local" | "keep_remote" | "keep_both" | null
+  resolved_at: datetime | null
+}</code></pre>
+  <h3>Provider adapter responsibilities</h3>
+  <ul>
+    <li>OAuth as a public desktop client: system browser (embedded webviews are blocked by Google), PKCE S256, one-time state, and a loopback redirect to <code>http://127.0.0.1:&lt;port&gt;</code>. The desktop "client secret" is not confidential and must not be relied on.</li>
+    <li>Request the narrowest scopes per stage: read-only calendar scopes for import; event write scopes only when the user enables two-way sync.</li>
+    <li>Token refresh, revocation on disconnect, and credential-vault integration; mark the account <code>needs_reauth</code> on <code>invalid_grant</code> instead of retrying.</li>
+    <li>List calendars, fetch changes, interpret cancellations and tombstones, and persist sync cursors.</li>
+    <li>Translate provider events into the canonical model (RRULE series + exception rows) without losing important provider metadata.</li>
+    <li>Handle rate limits, pagination, recurrence exceptions, all-day dates, time zones, attendees, and cancellation semantics.</li>
+  </ul>
+  <div class="callout warn"><strong>Important edge cases:</strong> recurring event edits ("this", "this and following", "all"), DST transitions, moved events, duplicate imports, deleted events, offline edits, token expiry, provider outages, and attendee changes need explicit tests. "Keep both" must create distinguishable records and mappings rather than a duplicate loop.</div>
+</section>
+
+<section id="email">
+  <div class="section-kicker">11 / Email integration</div><h2>Read-only mail triage</h2>
+  <p>Email in v1 answers "what needs my attention?" on the dashboard: unread counts, recent headers, and a button that opens the message in the provider's web app. Agenda does not send, delete, archive, or label mail.</p>
+  <ul>
+    <li>Poll message headers on the same scheduler as calendars (Gmail <code>history.list</code> with <code>historyId</code>; Graph <code>messages/delta</code>).</li>
+    <li>Cache headers only (<code>email_messages</code>). Bodies are fetched on demand, sanitized (render as text or in a sandboxed frame with remote content blocked), and never stored or logged.</li>
+    <li>Optionally attach a mail account to a space so the Work dashboard shows work mail only.</li>
+    <li>Email content is untrusted input; it is not passed to the AI planner unless the user selects a specific message.</li>
+  </ul>
+  <h3>Provider constraints</h3>
+  <table><thead><tr><th>Provider</th><th>Scope</th><th>Constraint</th></tr></thead><tbody>
+  <tr><td>Microsoft Graph</td><td><code>Mail.Read</code> (delegated)</td><td>User-consentable; no third-party security assessment. Publisher verification recommended before public release.</td></tr>
+  <tr><td>Gmail</td><td><code>gmail.metadata</code> or <code>gmail.readonly</code></td><td>Both are <em>restricted</em> scopes. A public release requires Google verification plus an annual third-party security assessment (CASA). For personal use, keep the OAuth app in "Testing" with named test users. In that status, refresh tokens expire after 7 days and the user must reconnect weekly.</td></tr>
+  </tbody></table>
+  <div class="callout warn"><strong>Ordering:</strong> build the Microsoft mail adapter first. Gmail ships under Testing status for personal use; decide whether to pay for a CASA assessment before any public Gmail release.</div>
+</section>
+
+<section id="widgets">
+  <div class="section-kicker">12 / Widget system</div><h2>Typed built-in widget registry</h2>
+  <p>In v1, widgets are built-in React components registered in a typed TypeScript registry. There are no manifest files, no dynamic loading, and no backend widget endpoints. The backend stores layout and configuration in <code>dashboard_profiles</code>; the registry validates it.</p>
+<pre><code>export interface WidgetDefinition&lt;Config&gt; {
+  id: string;                  // stable, e.g. "agenda.upcoming-events"
+  version: number;             // bump when the config shape changes
+  title: string;
+  configSchema: z.ZodType&lt;Config&gt;;
+  defaultConfig: Config;
+  migrateConfig?: (old: unknown, fromVersion: number) =&gt; Config;
+  layout: { minW: number; minH: number; resizable: boolean };
+  Component: React.FC&lt;{ config: Config; spaceIds: string[] }&gt;;
+}
+
+export const widgetRegistry = [
+  upcomingEvents, tasksAndChores, lists,     // Phase 2
+  notifications, emailSummary,               // Phase 5
+  aiProposals,                               // Phase 7
+] as const;</code></pre>
+  <h3>Widget lifecycle</h3>
+  <ol><li>Load the dashboard profile.</li><li>Look up each widget ID; an unknown ID renders a "widget unavailable" placeholder instead of failing the dashboard.</li><li>Migrate old configuration, then validate it against the schema; fall back to defaults on failure.</li><li>Render inside its own error boundary.</li><li>Fetch data through the generated API client for the profile's selected spaces.</li><li>Persist layout and configuration changes with optimistic concurrency.</li></ol>
+  <h3>Widget rules</h3>
+  <ul>
+    <li>Stable widget IDs; never reuse an ID for a different widget.</li>
+    <li>Configuration changes bump <code>version</code> and ship a migration.</li>
+    <li>Widgets hold no authority: every API call goes through the same session and space checks as the rest of the UI.</li>
+    <li>One broken widget must never crash the dashboard.</li>
+    <li>Third-party widgets (manifest, capability model, sandboxed iframes, <code>widget-sdk</code>) are deferred until there is a concrete need.</li>
+  </ul>
+</section>
+
+<section id="ai">
+  <div class="section-kicker">13 / Local AI planning</div><h2>Proposal-first AI pipeline</h2>
+  <div class="diagram">
+    <div class="node"><strong>Planning request</strong><small>Owner + target space + source event</small></div><div class="arrow">↓</div>
+    <div class="node"><strong>Authorized context builder</strong><small>Fetch only the events, tasks, people, preferences, and lists in permitted spaces</small></div><div class="arrow">↓</div>
+    <div class="node"><strong>LocalModelProvider</strong><small>Ollama first; llama.cpp may be added behind the same interface</small></div><div class="arrow">↓</div>
+    <div class="node"><strong>Structured proposal schema</strong><small>Pydantic validation · bounds · references · policy checks</small></div><div class="arrow">↓</div>
+    <div class="node"><strong>User review</strong><small>Edit, approve, or reject proposed tasks and schedule changes</small></div><div class="arrow">↓</div>
+    <div class="node"><strong>Application service</strong><small>Re-authorize, check revisions, commit transaction, queue sync</small></div>
+  </div>
+  <h3>Provider interface (illustrative)</h3>
+<pre><code>class LocalModelProvider(Protocol):
+    async def generate_structured(
+        self,
+        *,
+        system_prompt: str,
+        input_payload: PlanningContext,
+        output_schema: type[BaseModel],
+        timeout_seconds: float,
+    ) -> BaseModel: ...
+
+class PlanningProposal(BaseModel):
+    source_event_id: UUID
+    target_space_id: UUID
+    proposed_tasks: list[ProposedTask]
+    warnings: list[str]
+    rationale_summary: str</code></pre>
+  <h3>Hard constraints</h3>
+  <ul>
+    <li>AI is optional; task and calendar features must work if the runtime is absent or stopped.</li>
+    <li>No cloud-model fallback. The runtime must be local and bound to loopback unless explicitly configured otherwise.</li>
+    <li>Model output is untrusted data, even if it matches a JSON schema.</li>
+    <li>Validate all IDs, dates, durations, task counts, space access, assignees, duplicate proposals, and source revisions.</li>
+    <li>Never allow model-generated SQL or unrestricted tool execution.</li>
+    <li>Approval is not a permanent authorization grant: re-check permissions and revisions when applying the proposal.</li>
+    <li>Do not log prompts or email bodies by default. Minimize context and make AI-triggered actions auditable.</li>
+  </ul>
+</section>
+
+<section id="storage">
+  <div class="section-kicker">14 / Persistence & backup</div><h2>Migrations, backups, and recovery</h2>
+  <h3>Database rules</h3>
+  <ul>
+    <li>The database lives in the OS app-data directory (<code>%APPDATA%\Agenda</code>, <code>~/Library/Application Support/Agenda</code>, <code>$XDG_DATA_HOME/agenda</code>) with owner-only permissions.</li>
+    <li>Use versioned Alembic migrations and its version table; never rely on ORM auto-create. Take a snapshot before every migration.</li>
+    <li>Use transactions for domain mutations together with their outbox and job inserts.</li>
+    <li>Use foreign keys, unique constraints, and indexes for correctness, not only application checks.</li>
+    <li>Use tombstones where provider synchronization or audit retention requires it.</li>
+    <li>Use UTC timestamps and keep named time zones where calendar semantics need them.</li>
+  </ul>
+  <h3>Backup workflow</h3>
+  <ol>
+    <li>Create consistent copies with SQLite's online backup API or <code>VACUUM INTO</code>; both are safe while the app is running.</li>
+    <li>Keep rolling automatic snapshots (e.g. daily for 7 days, plus pre-migration) in the app-data directory.</li>
+    <li>Manual backups go to a user-chosen location as one file plus a manifest (app version, schema version, created_at), optionally encrypted with a passphrase.</li>
+    <li>Provider tokens are not in the database, so they are never in backups. After a restore on a new machine, the user reconnects accounts.</li>
+    <li>Restore: run <code>PRAGMA integrity_check</code>, verify the schema version is not newer than the app, pause workers, swap the file, and restart the sidecar.</li>
+    <li>Run automated restore tests in CI and verify core queries afterwards.</li>
+  </ol>
+  <div class="callout good">A backup is not considered verified until a restore test succeeds. Include restore drills in release qualification, not just backup creation tests.</div>
+</section>
+
+<section id="observability">
+  <div class="section-kicker">15 / Logging & diagnostics</div><h2>Useful diagnostics without leaking private data</h2>
+  <table><thead><tr><th>Signal</th><th>Record</th><th>Never record by default</th></tr></thead><tbody>
+  <tr><td>Application logs</td><td>Timestamp, level, component, request ID, error code, duration</td><td>Passphrases, tokens, launch secret, full event/email bodies</td></tr>
+  <tr><td>API metrics</td><td>Latency, status class, route template, error counts</td><td>Raw URLs with secrets or message content</td></tr>
+  <tr><td>Job telemetry</td><td>Job ID, kind, attempts, queue wait, duration, outcome category</td><td>Credential values or unredacted provider payloads</td></tr>
+  <tr><td>Sync status</td><td>Last success, next attempt, provider state, conflict count</td><td>OAuth access or refresh tokens</td></tr>
+  <tr><td>Audit log</td><td>Actor, action, target ID, timestamp, safe before/after metadata</td><td>Passphrases, tokens, unnecessary content snapshots</td></tr>
+  </tbody></table>
+  <p>Logs rotate in the app-data directory. Provide an in-app diagnostics view that can export a redacted support bundle. A user-controlled debug mode may add detail, but it must disclose what is captured and expire automatically.</p>
+</section>
+
+<section id="testing">
+  <div class="section-kicker">16 / Test strategy & coverage</div><h2>Testing pyramid and measurable gates</h2>
+  <div class="grid3">
+    <div class="card"><span class="tag t-green">Fast</span><h3>Unit</h3><p>Domain rules, schemas, permission policy, recurrence and time-zone calculations, conflict classification, retry policy, widget config migrations.</p></div>
+    <div class="card"><span class="tag t-blue">Integrated</span><h3>Service / DB</h3><p>API + SQLite (temp file per test), migrations, transactions, job claims, provider adapter fakes.</p></div>
+    <div class="card"><span class="tag t-violet">End-to-end</span><h3>Packaged app</h3><p>Installer, sidecar launch, setup/unlock, persistence, offline flow, sync conflicts, backup/restore.</p></div>
+  </div>
+  <h3>Coverage targets (proposed gates)</h3>
+  <table><thead><tr><th>Area</th><th>Coverage / test gate</th><th>Required scenarios</th></tr></thead><tbody>
+  <tr><td>Domain logic</td><td>≥ 85% line coverage for core domain packages</td><td>Valid/invalid transitions, recurrence edge cases, chore regeneration, assignee rules.</td></tr>
+  <tr><td>Local API boundary</td><td>Every route has a rejection test</td><td>Missing/wrong launch secret, locked app, bad Host header, disallowed Origin, unlock throttling.</td></tr>
+  <tr><td>Authorization</td><td>100% of space-scoped routes have allow/deny tests</td><td>Cross-space object-ID substitution returns 404; IDs in request bodies ignored; editor/viewer policy unit-tested ahead of shared mode.</td></tr>
+  <tr><td>API contracts</td><td>Every endpoint has schema and status tests</td><td>Validation errors, pagination, concurrency conflicts, read-only source writes.</td></tr>
+  <tr><td>Database</td><td>All migrations run from empty DB and from every released schema version</td><td>Constraints, pre-migration snapshot, newer-schema refusal, transaction integrity.</td></tr>
+  <tr><td>Job queue</td><td>Crash/retry tests for each job class</td><td>Expired lease reclaim, duplicate delivery, bounded retries, dead-letter behavior.</td></tr>
+  <tr><td>Calendar sync</td><td>Provider contract suite with recorded fixtures; sandbox accounts where practical</td><td>Import, 410/expired-delta full resync, create/update/delete, remote edits, conflicts, token expiry, rate limits, recurrence scopes, DST.</td></tr>
+  <tr><td>Email</td><td>Adapter contract suite</td><td>Header sync, unread counts, body fetched but not persisted, HTML sanitization, <code>needs_reauth</code>.</td></tr>
+  <tr><td>Offline behavior</td><td>Automated connectivity interruption tests</td><td>Queue edits, restart while offline, reconnect and reconcile without duplicates.</td></tr>
+  <tr><td>AI pipeline</td><td>Schema and policy tests; deterministic mock model in CI</td><td>Malformed output, unauthorized IDs, prompt injection in event text, stale proposal, rejection, approval.</td></tr>
+  <tr><td>Widgets</td><td>Registry tests</td><td>Unknown widget ID, invalid config fallback, config migration, crash isolation.</td></tr>
+  <tr><td>Backup/restore</td><td>Restore drill required for release</td><td>Restore into clean install, integrity check, schema version, reconnect provider accounts.</td></tr>
+  <tr><td>Desktop packaging</td><td>Smoke tests on Windows/macOS/Linux</td><td>Install, first run, sidecar fails to start, corrupt or locked DB file, second instance, upgrade with migration, graceful shutdown.</td></tr>
+  </tbody></table>
+  <div class="callout warn">Coverage percentages are useful indicators, not proof of correctness. Security boundaries, sync edge cases, and recovery flows need explicit scenario tests even when aggregate coverage is high.</div>
+  <h3>Suggested CI pipeline</h3>
+<pre><code>1. Format + lint
+   - Python: ruff format/check, mypy or pyright as adopted
+   - TypeScript: eslint + tsc --noEmit
+   - Rust: cargo fmt --check, clippy
+
+2. Unit tests
+   - Python domain/application tests
+   - Frontend component, state, and widget registry tests (Vitest)
+   - Rust lifecycle/launch-secret tests
+
+3. Integration tests
+   - Temp SQLite database per test; apply migrations from empty
+   - Upgrade from each released schema fixture
+   - API, repository, queue, and authorization tests
+
+4. Contract / fault tests
+   - Provider adapter fakes and recorded fixtures
+   - Retries, timeouts, duplicate events, conflict cases
+   - AI structured-output and policy validation
+
+5. Build and package (matrix: Windows, macOS, Linux)
+   - Build frontend, Python sidecar executable, Tauri app
+   - Sign/notarize app and sidecar
+   - Scan dependencies and produce SBOM
+
+6. Release qualification
+   - Install/upgrade on OS matrix
+   - Offline smoke tests
+   - Backup/restore drill
+   - Security regression suite</code></pre>
+</section>
+
+<section id="lifecycle">
+  <div class="section-kicker">17 / Lifecycle phases</div><h2>Development lifecycle from prototype to release</h2>
+  <p>Each phase ends in a usable state and maps one-to-one to a milestone in section 18. Phase 3 is the <strong>personal MVP</strong>: the point where Agenda replaces opening Google Calendar and a to-do app every morning.</p>
+  <div class="card"><span class="tag t-cyan">Phase 0</span><h3>Architecture validation</h3><p><strong>Goal:</strong> retire the packaging and process-lifecycle risks before writing features.</p><ul><li>Tauri spawns the bundled Python sidecar, passes the launch secret, and supervises it through crash and shutdown.</li><li>Sidecar creates and migrates a SQLite file in the app-data directory.</li><li>Choose the sidecar bundler; sign and notarize on macOS; check Windows SmartScreen/antivirus behavior; measure cold start.</li><li>CI builds installers on all three OSes.</li></ul><p><strong>Exit gate:</strong> on every OS, the packaged app creates a record, restarts, and reads it back.</p></div>
+  <div class="card"><span class="tag t-blue">Phase 1</span><h3>Personal core</h3><p><strong>Goal:</strong> the local data foundation.</p><ul><li>First-run setup, owner profile, optional app lock, local API boundary checks.</li><li>Spaces, people, tasks and repeating chores, lists, local events with the recurrence model.</li><li>Error envelope, optimistic concurrency, job queue, outbox worker, audit log.</li></ul><p><strong>Exit gate:</strong> data persists across restarts; every route rejects a missing secret; cross-space substitution tests pass; job crash/retry tests pass.</p></div>
+  <div class="card"><span class="tag t-violet">Phase 2</span><h3>Dashboard</h3><p><strong>Goal:</strong> the customizable desktop experience on local data.</p><ul><li>Dashboard profiles, typed widget registry, layout persistence.</li><li>Starter widgets: upcoming events, tasks & chores, lists.</li><li>Widget error boundaries, config migration, keyboard accessibility.</li></ul><p><strong>Exit gate:</strong> the owner can build Personal, Work, and Family dashboards that survive restarts, and a broken widget cannot take down a dashboard.</p></div>
+  <div class="card"><span class="tag t-amber">Phase 3</span><h3>Google Calendar, read-only <span class="small">· personal MVP</span></h3><p><strong>Goal:</strong> see real calendars in Agenda.</p><ul><li>Desktop OAuth flow, credential vault, account management.</li><li>Calendar-to-space mapping, incremental polling with sync tokens, full resync on 410.</li><li>Import of recurrence, exceptions, all-day events, time zones, and cancellations.</li></ul><p><strong>Exit gate:</strong> import stays correct through DST, recurrence exceptions, deletions, and forced resyncs, with no duplicate events.</p></div>
+  <div class="card"><span class="tag t-red">Phase 4</span><h3>Two-way sync and Microsoft</h3><p><strong>Goal:</strong> edit provider events from Agenda safely.</p><ul><li>Provider writes with ETag preconditions, event mappings, offline write queue.</li><li>Conflict detection and resolution UI (keep local, remote, or both); recurring edit scopes.</li><li>Microsoft Graph calendar adapter (read-only, then two-way) against the same contract suite.</li></ul><p><strong>Exit gate:</strong> both providers pass the contract suite and no tested conflict path silently overwrites data.</p></div>
+  <div class="card"><span class="tag t-cyan">Phase 5</span><h3>Notifications and email</h3><p><strong>Goal:</strong> Agenda tells you what needs attention.</p><ul><li>Reminder planner, OS notifications through Tauri, in-app inbox, quiet hours.</li><li>Read-only email triage: Microsoft mail first, Gmail under Testing status.</li><li>Notification and email summary widgets.</li></ul><p><strong>Exit gate:</strong> reminders fire correctly across restarts and time-zone changes; email bodies are never persisted or logged.</p></div>
+  <div class="card"><span class="tag t-green">Phase 6</span><h3>Release hardening</h3><p><strong>Goal:</strong> something you could hand to someone else.</p><ul><li>Backup/restore UI, automatic snapshots, diagnostics bundle.</li><li>Installers, auto-update, upgrade migrations from every released version.</li><li>Security review, dependency scanning, SBOM; decide on Google verification.</li></ul><p><strong>Exit gate:</strong> restore drill and install/upgrade smoke tests pass on all supported OSes.</p></div>
+  <div class="card"><span class="tag t-violet">Phase 7</span><h3>Optional local AI</h3><p><strong>Goal:</strong> generate safe, reviewable planning proposals.</p><ul><li>Provider interface, local runtime configuration, authorized context builder.</li><li>Structured proposals, deterministic validation, approval and audit, proposals widget.</li><li>Prompt-injection and stale-proposal tests.</li></ul><p><strong>Exit gate:</strong> AI can be disabled without breaking core features; no proposal applies without user approval.</p></div>
+  <div class="card"><span class="tag t-amber">Future</span><h3>Shared mode <span class="small">· not scheduled</span></h3><p>Multiple people sharing spaces across devices. Requires a sync server, remote authentication, invitations, and its own specification and threat model. Start only after Phase 6.</p></div>
+</section>
+
+<section id="roadmap">
+  <div class="section-kicker">18 / Milestones & gates</div><h2>Implementation roadmap</h2>
+  <p>Sequence work by dependency and risk rather than calendar dates. Each milestone closes the phase with the same number.</p>
+  <table><thead><tr><th>Milestone</th><th>What you can do afterwards</th><th>Acceptance gate</th></tr></thead><tbody>
+  <tr><td>M0 · Vertical slice</td><td>Install and launch Agenda on all three OSes.</td><td>Packaged app writes, restarts, and reads persisted data on every OS.</td></tr>
+  <tr><td>M1 · Personal core</td><td>Manage tasks, chores, lists, and local events across spaces (via API and a basic UI).</td><td>Boundary, cross-space, and job crash/retry suites pass.</td></tr>
+  <tr><td>M2 · Dashboard</td><td>Use per-space dashboards daily for local data.</td><td>Layouts persist; widget failures are isolated.</td></tr>
+  <tr><td>M3 · Personal MVP</td><td>See Google calendars alongside tasks and chores.</td><td>Read-only import correct through recurrence, DST, deletions, and resync.</td></tr>
+  <tr><td>M4 · Two-way sync</td><td>Edit Google and Microsoft events from Agenda.</td><td>Contract suites pass for both providers; no silent overwrites.</td></tr>
+  <tr><td>M5 · Attention</td><td>Get reminders and see unread mail at a glance.</td><td>Reminders survive restarts; email bodies never persisted.</td></tr>
+  <tr><td>M6 · Release</td><td>Install, update, back up, and restore with confidence.</td><td>Restore drill, OS matrix, and security review pass.</td></tr>
+  <tr><td>M7 · Local AI</td><td>Ask for a plan and approve or reject it.</td><td>Model output never bypasses validation or approval; core app works without AI.</td></tr>
+  </tbody></table>
+</section>
+
+<section id="risks">
+  <div class="section-kicker">19 / Risks & open decisions</div><h2>Risks to manage deliberately</h2>
+  <table><thead><tr><th>Risk</th><th>Impact</th><th>Mitigation</th></tr></thead><tbody>
+  <tr><td>Python sidecar packaging and code signing</td><td>High</td><td>Prove it in Phase 0 on all three OSes; pick the bundler early; sign/notarize the sidecar with the app; track cold-start time and installer size.</td></tr>
+  <tr><td>Bidirectional sync data loss</td><td>High</td><td>Read-only first; revision tracking, ETag preconditions, conflict snapshots, idempotent writes, explicit resolution UI.</td></tr>
+  <tr><td>Google OAuth verification and restricted scopes</td><td>High</td><td>Testing-status refresh tokens expire after 7 days; Gmail scopes need an annual CASA assessment for public release. Start with calendar scopes and Microsoft mail; plan verification before any public release.</td></tr>
+  <tr><td>Local API reachable by other local software or web pages</td><td>High</td><td>Per-launch secret over stdin, loopback bind, Host/Origin validation, strict CORS, boundary test suite.</td></tr>
+  <tr><td>Incorrect space scoping</td><td>High</td><td>Central policy checks, path-derived space IDs, cross-space negative tests, foreign-key constraints.</td></tr>
+  <tr><td>Secrets exposed on local machine</td><td>High</td><td>OS credential vault, owner-only file permissions, token redaction, documented limits of app lock.</td></tr>
+  <tr><td>AI prompt injection or invalid plans</td><td>High</td><td>Untrusted context treatment, schema and policy validation, review-before-apply, audit trail.</td></tr>
+  <tr><td>Future shared mode</td><td>High</td><td>Stable IDs, revisions, outbox change log, users/memberships kept in schema; write the shared-mode spec before any remote access.</td></tr>
+  <tr><td>SQLite write contention</td><td>Low</td><td>Single sidecar process, WAL, <code>busy_timeout</code>, short write transactions, no transaction held across network calls.</td></tr>
+  <tr><td>Widget complexity</td><td>Low</td><td>Typed built-in registry only; third-party extension deferred.</td></tr>
+  </tbody></table>
+  <h3>Decisions to make before implementation of the affected feature</h3>
+  <ul>
+    <li>Sidecar bundler: PyInstaller, Nuitka, or a standalone Python build plus virtual environment (Phase 0).</li>
+    <li>Recurring event model details: how RRULE series, exceptions, and the "this and following" split are stored (Phase 1).</li>
+    <li>At-rest database encryption (SQLCipher) versus relying on OS disk encryption (Phase 1).</li>
+    <li>Exact OAuth scopes per stage, and whether to pursue Google verification and CASA (Phases 3–6).</li>
+    <li>Polling cadence, and whether to keep syncing from the system tray when the window is closed (Phase 3).</li>
+    <li>Backup encryption and passphrase recovery behavior (Phase 6).</li>
+    <li>When live UI updates justify Server-Sent Events over polling.</li>
+  </ul>
+</section>
+
+<section id="acceptance">
+  <div class="section-kicker">20 / Release acceptance</div><h2>Definition of done</h2>
+  <ul class="checklist">
+    <li>Application installs and launches on every supported OS without Docker or a separately installed database.</li>
+    <li>Backend is reachable only from the Agenda frontend through the loopback launch-secret boundary.</li>
+    <li>The owner can organize personal, work, and family spaces, assign chores to people, and optionally lock the app.</li>
+    <li>Every space-scoped API route has authorization and negative access tests.</li>
+    <li>Tasks and Agenda-owned events survive restart and offline operation.</li>
+    <li>Dashboard layouts and widget configuration persist, and broken widgets fail in isolation.</li>
+    <li>Google and Microsoft sync jobs are durable, retryable, and idempotent where required.</li>
+    <li>Conflicts are visible and users can keep the local version, provider version, or both.</li>
+    <li>Email is read-only and message bodies are never stored.</li>
+    <li>AI is optional, local-only, proposal-based, and requires explicit approval.</li>
+    <li>Backups can be restored into a clean install and verified.</li>
+    <li>Logs and diagnostics do not expose passphrases, tokens, or private content by default.</li>
+    <li>Database migrations, upgrade paths, and failure recovery are documented and tested.</li>
+  </ul>
+  <div class="callout good"><strong>Final engineering principle:</strong> ship a small, secure, observable end-to-end product first. Add integrations and AI only after the local API boundary, persistence, and job-processing foundations have proven reliable.</div>
+</section>
+</main>
+</div>
+<footer><div class="wrap">AGENDA / ENGINEERING SPEC · Draft baseline v1.0 · Architecture and API definitions are proposed and must be validated by implementation, security review, and integration testing.</div></footer>
+</body>
+</html>
