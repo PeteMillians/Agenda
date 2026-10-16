@@ -229,6 +229,7 @@ footer{border-top:1px solid var(--line);padding:25px 0 45px;color:var(--muted);f
 │   ├── api/
 │   └── operations/
 └── README.md</code></pre>
+  <div class="callout"><strong>Deep dive:</strong> process boundaries, the Tauri IPC and loopback-HTTP channels, the startup handshake, and a hop-by-hop request trace are in the <a href="Agenda_Architecture.html">component &amp; IPC map →</a></div>
   <div class="callout good"><strong>Dependency direction:</strong> API routes call application services. Application services depend on domain interfaces and repositories. Provider SDKs, SQLite, and model runtimes are infrastructure adapters. Domain logic should not import FastAPI route modules or provider SDKs.</div>
   <h3>Technology choices</h3>
   <table><thead><tr><th>Layer</th><th>Choice</th><th>Notes</th></tr></thead><tbody>

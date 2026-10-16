@@ -1,0 +1,626 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Agenda Component Map</title>
+<style>
+:root{
+ --bg:#0a0f1a;--panel:#111a2a;--panel2:#152136;--line:#263650;--text:#e8eef8;--muted:#9cabc2;
+ --cyan:#55d6e8;--blue:#78a9ff;--violet:#c5a3ff;--green:#65dfae;--amber:#ffc66d;--red:#ff858e;
+ --code:#08101c;--shadow:0 18px 55px rgba(0,0,0,.25);--radius:18px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:90px}
+body{margin:0;background:radial-gradient(ellipse at 15% 0%,#122642 0,transparent 38%),var(--bg);color:var(--text);font:15px/1.68 Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+a{color:var(--cyan);text-decoration:none}a:hover{text-decoration:underline}
+code,pre,.mono{font-family:ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace}
+code{font-size:.91em;color:#b9d9ff;background:#0a1322;padding:.15em .35em;border-radius:5px}
+pre{overflow:auto;background:var(--code);border:1px solid var(--line);border-radius:12px;padding:18px;color:#d5e5f8;font-size:12.5px;line-height:1.65;tab-size:2}
+pre code{padding:0;background:none;color:inherit}
+pre .c{color:#7f93ad}
+h1,h2,h3,h4{line-height:1.22;letter-spacing:-.025em}
+h1{font-size:clamp(2.3rem,5.2vw,4.6rem);margin:.5rem 0 1rem;max-width:950px}
+h2{font-size:clamp(1.6rem,3vw,2.35rem);margin:0 0 1.1rem}
+h3{font-size:1.2rem;margin:1.6rem 0 .6rem}
+h4{font-size:1rem;margin:1rem 0 .4rem}
+p{margin:.55rem 0 1rem;color:#c5d0e0}
+ul,ol{padding-left:1.3rem;color:#c5d0e0}
+li{margin:.32rem 0}
+.wrap{max-width:1240px;margin:auto;padding:0 28px}
+.topbar{position:sticky;top:0;z-index:10;backdrop-filter:blur(18px);background:#0a0f1add;border-bottom:1px solid #263650aa}
+.topbar-inner{display:flex;align-items:center;justify-content:space-between;gap:18px;min-height:62px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:800;letter-spacing:.04em}
+.brand-mark{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,var(--cyan),var(--violet));display:grid;place-items:center;color:#07111c;font-weight:900}
+.nav{display:flex;gap:15px;overflow:auto;white-space:nowrap;font-size:12px;color:var(--muted)}
+.hero{padding:70px 0 44px}
+.eyebrow{color:var(--cyan);text-transform:uppercase;letter-spacing:.19em;font-size:11px;font-weight:800}
+.subtitle{font-size:1.15rem;max-width:860px;color:#b5c5db}
+.meta{display:flex;gap:8px;flex-wrap:wrap;margin:25px 0}
+.pill,.tag{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:5px 10px;font-size:11px;font-weight:800;letter-spacing:.04em}
+.pill{background:#121e31;color:#c8d6e9}
+.tag{border-radius:6px;text-transform:uppercase}
+.t-cyan{color:var(--cyan);border-color:#267a8a;background:#0c2932}
+.t-violet{color:var(--violet);border-color:#6c4ba4;background:#251a3d}
+.t-green{color:var(--green);border-color:#286f58;background:#0e2b25}
+.t-amber{color:var(--amber);border-color:#8a642c;background:#302416}
+.t-blue{color:var(--blue);border-color:#355a99;background:#111f3a}
+.t-red{color:var(--red);border-color:#8d3e4a;background:#321922}
+.layout{display:grid;grid-template-columns:250px minmax(0,1fr);gap:30px;padding-bottom:90px}
+.sidebar{align-self:start;position:sticky;top:82px;max-height:calc(100vh - 100px);overflow:auto;border:1px solid var(--line);background:#0e1726cc;border-radius:var(--radius);padding:18px}
+.sidebar h4{color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.15em;margin:0 0 10px}
+.sidebar a{display:block;padding:6px 8px;border-radius:7px;color:#b8c7dc;font-size:12px}
+.sidebar a:hover{background:var(--panel2);text-decoration:none;color:white}
+main{min-width:0}
+section{margin:0 0 62px;scroll-margin-top:90px}
+.section-kicker{font-size:11px;color:var(--muted);letter-spacing:.16em;text-transform:uppercase;margin-bottom:8px}
+.card{background:linear-gradient(180deg,#131e30,#0f1827);border:1px solid var(--line);border-radius:var(--radius);padding:22px;margin:14px 0;box-shadow:var(--shadow)}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.callout{border-left:3px solid var(--cyan);padding:13px 16px;background:#10232d;border-radius:0 10px 10px 0;margin:16px 0;color:#d4e7f0}
+.callout.warn{border-color:var(--amber);background:#2b2114}
+.callout.danger{border-color:var(--red);background:#2a1720}
+.callout.good{border-color:var(--green);background:#10261f}
+table{width:100%;border-collapse:collapse;margin:15px 0;font-size:13px}
+th,td{border-bottom:1px solid var(--line);padding:10px 11px;text-align:left;vertical-align:top}
+th{color:#a9c4e5;background:#101b2b;font-size:11px;text-transform:uppercase;letter-spacing:.07em}
+td{color:#c4d0df}
+tr:hover td{background:#111c2c}
+.tablewrap{overflow-x:auto}
+details{border:1px solid var(--line);border-radius:12px;margin:10px 0;background:#0e1725}
+summary{cursor:pointer;padding:13px 15px;color:#d8e5f6;font-weight:700}
+details>div{padding:0 15px 15px}
+footer{border-top:1px solid var(--line);padding:25px 0 45px;color:var(--muted);font-size:12px}
+.small{font-size:12px;color:var(--muted)}
+.hop{display:grid;grid-template-columns:44px minmax(0,1fr);gap:14px;border-top:1px solid #22314a;padding:16px 0}
+.hop .n{font:800 13px ui-monospace,monospace;color:var(--violet);background:#251a3d;border:1px solid #6c4ba4;border-radius:10px;height:34px;display:grid;place-items:center}
+.hop.py .n{color:var(--green);background:#0e2b25;border-color:#286f58}
+.hop h4{margin:4px 0 6px}
+.hop p{margin:.3rem 0 .6rem}
+.fails{font-size:12px;color:var(--red)}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--muted);margin:10px 0 0}
+.legend span{display:inline-flex;align-items:center;gap:7px}
+.legend i{display:inline-block;width:26px;height:0;border-top:2px solid}
+/* figures */
+figure{margin:20px 0}
+.fig{overflow-x:auto;background:#0c1524;border:1px solid var(--line);border-radius:14px;padding:14px}
+.fig svg{display:block;width:100%;height:auto}
+figcaption{font-size:12.5px;color:var(--muted);margin-top:9px;line-height:1.55}
+svg text{fill:var(--text);font-family:Inter,ui-sans-serif,system-ui,sans-serif;font-size:12px}
+svg .tt{font-size:13px;font-weight:700}
+svg .ts{font-size:12px;font-weight:600}
+svg .tm{fill:var(--muted);font-size:10.5px}
+svg .pt{font-size:13px;font-weight:800;fill:#ffffff}
+svg .mutedt{fill:var(--muted)}
+svg .mono{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11.5px}
+svg .lbl{font-size:11.5px;font-weight:600}
+svg .bnd{fill:var(--muted);font-size:10.5px;font-weight:800;letter-spacing:.12em}
+svg .colh{fill:var(--muted);font-size:11px;font-weight:800;letter-spacing:.14em}
+svg .step{fill:#56688a;font-size:10.5px;font-weight:800}
+svg .bx{fill:#111e31;stroke:#2c3f5e;stroke-width:1.2}
+svg .bx2{fill:#172640;stroke:#30476b;stroke-width:1}
+svg .ext{fill:#0d1626;stroke-dasharray:4 3}
+svg .hl{stroke:var(--green);fill:#0f2620}
+svg .bad{stroke:var(--red);fill:#2a1720}
+svg .proc{fill:#0f1a2b;stroke:#3a5279;stroke-width:1.6}
+svg .boundary{fill:none;stroke:#3d5578;stroke-width:1.3;stroke-dasharray:8 6}
+svg .hlb{stroke:var(--green)}
+svg .life{stroke:#2f4366;stroke-width:1.2;stroke-dasharray:3 4}
+svg .wire{stroke:#3d5578;stroke-width:1.2;stroke-dasharray:6 5}
+svg .note{stroke-width:1}
+svg .e{fill:none;stroke-width:1.8}
+.e-cyan{stroke:var(--cyan)}.e-violet{stroke:var(--violet)}.e-amber{stroke:var(--amber)}.e-green{stroke:var(--green)}.e-blue{stroke:var(--blue)}.e-red{stroke:var(--red)}.e-muted{stroke:var(--muted)}
+svg .f-cyan{fill:var(--cyan)}svg .f-violet{fill:var(--violet)}svg .f-amber{fill:var(--amber)}svg .f-green{fill:var(--green)}svg .f-blue{fill:var(--blue)}svg .f-red{fill:var(--red)}svg .f-muted{fill:var(--muted)}
+svg .l-cyan{fill:var(--cyan)}svg .l-violet{fill:var(--violet)}svg .l-amber{fill:var(--amber)}svg .l-green{fill:var(--green)}svg .l-blue{fill:var(--blue)}svg .l-red{fill:var(--red)}svg .l-muted{fill:var(--muted)}
+svg .n-amber{fill:#302416;stroke:#8a642c}svg .n-green{fill:#0e2b25;stroke:#286f58}svg .n-violet{fill:#251a3d;stroke:#6c4ba4}
+@media(max-width:900px){.layout{grid-template-columns:minmax(0,1fr)}.sidebar{position:relative;top:0;max-height:none}.nav{display:none}.hero{padding-top:44px}}
+@media(max-width:600px){.wrap{padding:0 16px}.grid{grid-template-columns:1fr}.card{padding:16px}pre{font-size:11px}.hop{grid-template-columns:34px minmax(0,1fr);gap:10px}}
+@media print{body{background:white;color:#111}.topbar,.sidebar{display:none}.layout{display:block}.card,details{background:white;border-color:#bbb;box-shadow:none;break-inside:avoid}p,li,td{color:#222}h1,h2,h3,strong{color:#111}pre{white-space:pre-wrap;background:#f5f5f5;color:#111}}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="wrap topbar-inner">
+    <div class="brand"><span class="brand-mark">A</span><span>AGENDA <span style="color:var(--muted);font-weight:500">/ COMPONENT MAP</span></span></div>
+    <nav class="nav"><a href="Agenda_Top.html">← Engineering spec</a><a href="#map">Map</a><a href="#tauri">Tauri primer</a><a href="#startup">Startup</a><a href="#request">TS → Python</a><a href="#contract">Contracts</a><a href="#gaps">Gaps</a></nav>
+  </div>
+</header>
+<div class="wrap hero">
+  <div class="eyebrow">Companion to the engineering spec · v1.0-draft</div>
+  <h1>Agenda<span style="color:var(--cyan)">.</span><br><span style="color:#9fb7d8">How the pieces connect</span></h1>
+  <p class="subtitle">This document goes one level below <a href="Agenda_Top.html#architecture">spec §03</a>. It covers which OS process each component runs in, the exact channel behind every arrow, and what a request from a React component goes through before it reaches SQLite. It's written for someone who hasn't used Tauri yet.</p>
+  <div class="meta">
+    <span class="tag t-cyan">Tauri IPC</span><span class="tag t-violet">Loopback HTTP</span><span class="tag t-amber">stdin / stdout</span><span class="tag t-green">Local files &amp; vault</span><span class="tag t-blue">Internet / external</span>
+  </div>
+  <div class="callout"><strong>Status:</strong> No code exists yet, so everything here is a design. The code snippets show the intended shape and target Tauri v2, FastAPI with Pydantic v2, and <code>openapi-fetch</code>. Check exact APIs against current docs when Phase 0 starts. Places where this document fills a gap in the spec are flagged and collected in <a href="#gaps">§10</a>.</div>
+</div>
+
+<div class="wrap layout">
+<aside class="sidebar">
+  <h4>Contents</h4>
+  <a href="#read">00 · How to read this</a>
+  <a href="#map">01 · Component map</a>
+  <a href="#tauri">02 · Tauri primer</a>
+  <a href="#startup">03 · Startup handshake</a>
+  <a href="#request">04 · TS → Python, hop by hop</a>
+  <a href="#contract">05 · The type contract</a>
+  <a href="#reverse">06 · Backend → frontend</a>
+  <a href="#oauth">07 · OAuth across processes</a>
+  <a href="#failure">08 · Crashes &amp; restarts</a>
+  <a href="#dev">09 · Dev-mode wiring</a>
+  <a href="#gaps">10 · Gaps to fold into the spec</a>
+  <a href="#glossary">11 · Glossary</a>
+  <h4 style="margin-top:18px">Elsewhere</h4>
+  <a href="Agenda_Top.html">Engineering spec →</a>
+</aside>
+<main>
+
+<section id="read">
+  <div class="section-kicker">00 / Orientation</div><h2>How to read this</h2>
+  <p>Agenda runs as <strong>three cooperating OS processes</strong>: a Rust program, a web view that the Rust program hosts, and a Python program that the Rust program launches. Most of the confusion in this kind of stack comes from not knowing which process a given line of code runs in, so every diagram here draws process boundaries explicitly.</p>
+  <div class="legend">
+    <span><i style="border-color:var(--cyan)"></i>Tauri IPC (in-app, Rust ⇄ WebView)</span>
+    <span><i style="border-color:var(--violet)"></i>HTTP on 127.0.0.1</span>
+    <span><i style="border-color:var(--amber)"></i>stdin / stdout pipe</span>
+    <span><i style="border-color:var(--green)"></i>local disk / OS vault</span>
+    <span><i style="border-color:var(--blue)"></i>internet / outside the bundle</span>
+    <span><i style="border-color:var(--red)"></i>rejection / failure</span>
+  </div>
+  <p class="small" style="margin-top:12px">Solid outlined panels are OS processes. Dashed outlines are trust boundaries or things the app doesn't own.</p>
+</section>
+
+<section id="map">
+  <div class="section-kicker">01 / Component map</div><h2>Every component, process, and channel</h2>
+  <figure>
+    <div class="fig"><svg viewBox="0 0 1200 770" role="img" aria-label="Component map: the Rust core process owns the window, the launch secret and the Python sidecar; the WebView talks to Rust over Tauri IPC and to the sidecar over loopback HTTP; only the sidecar touches SQLite, the credential vault, providers and Ollama." style="min-width:820px"><defs><marker id="cm-cyan" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="f-cyan"/></marker><marker id="cm-violet" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="f-violet"/></marker><marker id="cm-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="f-amber"/></marker><marker id="cm-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="f-green"/></marker><marker id="cm-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="f-blue"/></marker><marker id="cm-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="f-red"/></marker><marker id="cm-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="f-muted"/></marker></defs><rect x="14" y="100" width="1172" height="548" rx="16" class="boundary"/><text x="486" y="120" text-anchor="start" class="bnd">AGENDA BUNDLE · only these processes hold the launch secret</text><rect x="30" y="20" width="200" height="56" rx="9" class="bx ext"/><text x="130.0" y="45.0" text-anchor="middle" class="tt">OS notification center</text><text x="130.0" y="61.0" text-anchor="middle" class="tm">Action Center · NC · libnotify</text><rect x="270" y="20" width="200" height="56" rx="9" class="bx ext"/><text x="370.0" y="45.0" text-anchor="middle" class="tt">System browser</text><text x="370.0" y="61.0" text-anchor="middle" class="tm">OAuth sign-in only</text><rect x="30" y="134" width="440" height="206" rx="12" class="proc"/><text x="250" y="158" text-anchor="middle" class="pt">agenda · Rust core (main process)</text><rect x="50" y="172" width="190" height="38" rx="9" class="bx2"/><text x="145.0" y="195.0" text-anchor="middle" class="ts">Window + lifecycle</text><rect x="260" y="172" width="190" height="38" rx="9" class="bx2"/><text x="355.0" y="195.0" text-anchor="middle" class="ts">Sidecar supervisor</text><rect x="50" y="220" width="190" height="38" rx="9" class="bx2"/><text x="145.0" y="243.0" text-anchor="middle" class="ts">Launch secret (RAM only)</text><rect x="260" y="220" width="190" height="38" rx="9" class="bx2"/><text x="355.0" y="243.0" text-anchor="middle" class="ts mono">cmd: get_backend_config</text><rect x="50" y="268" width="400" height="54" rx="9" class="bx2"/><text x="250.0" y="292.0" text-anchor="middle" class="ts">Plugins</text><text x="250.0" y="308.0" text-anchor="middle" class="tm">shell · notification · opener · single-instance</text><polyline points="140,134 140,78" class="e e-cyan" marker-end="url(#cm-cyan)"/><text x="148" y="104" text-anchor="start" class="lbl l-cyan">notify</text><polyline points="370,134 370,78" class="e e-cyan" marker-end="url(#cm-cyan)"/><text x="378" y="104" text-anchor="start" class="lbl l-cyan">open_url</text><rect x="30" y="420" width="440" height="210" rx="12" class="proc"/><text x="250" y="444" text-anchor="middle" class="pt">WebView · React + TypeScript</text><rect x="50" y="458" width="400" height="40" rx="9" class="bx2"/><text x="250.0" y="482.0" text-anchor="middle" class="ts">React UI · dashboard · widget registry</text><rect x="50" y="510" width="190" height="52" rx="9" class="bx2"/><text x="145.0" y="533.0" text-anchor="middle" class="ts mono">@tauri-apps/api</text><text x="145.0" y="549.0" text-anchor="middle" class="tm">invoke() · listen()</text><rect x="260" y="510" width="190" height="52" rx="9" class="bx2"/><text x="355.0" y="533.0" text-anchor="middle" class="ts">API client</text><text x="355.0" y="549.0" text-anchor="middle" class="tm">openapi-fetch + types</text><text x="250" y="600" text-anchor="middle" class="tm">OS-provided engine: WebView2 · WKWebView · WebKitGTK</text><polyline points="145,420 145,342" class="e e-cyan" marker-end="url(#cm-cyan)"/><text x="155" y="385" text-anchor="start" class="lbl l-cyan">invoke()</text><polyline points="355,342 355,420" class="e e-cyan" marker-end="url(#cm-cyan)"/><text x="365" y="385" text-anchor="start" class="lbl l-cyan">emit()</text><rect x="640" y="134" width="530" height="496" rx="12" class="proc"/><text x="905" y="158" text-anchor="middle" class="pt">agenda-backend · Python sidecar (child process)</text><rect x="665" y="172" width="480" height="42" rx="9" class="bx2"/><text x="905.0" y="197.0" text-anchor="middle" class="ts">stdio: read secret · print AGENDA_READY</text><rect x="665" y="228" width="480" height="42" rx="9" class="bx2"/><text x="905.0" y="253.0" text-anchor="middle" class="ts">uvicorn · listening on 127.0.0.1:&lt;random port&gt;</text><rect x="665" y="284" width="480" height="42" rx="9" class="bx2"/><text x="905.0" y="309.0" text-anchor="middle" class="ts">Middleware: CORS → Host → Bearer</text><rect x="665" y="340" width="480" height="42" rx="9" class="bx2"/><text x="905.0" y="365.0" text-anchor="middle" class="ts">Routes /api/v1 · Pydantic · app-lock gate</text><rect x="665" y="396" width="480" height="42" rx="9" class="bx2"/><text x="905.0" y="421.0" text-anchor="middle" class="ts">Application services · authz · txn · outbox</text><rect x="665" y="452" width="480" height="42" rx="9" class="bx2"/><text x="905.0" y="477.0" text-anchor="middle" class="ts">Repositories · SQLAlchemy + aiosqlite</text><rect x="665" y="508" width="480" height="42" rx="9" class="bx2"/><text x="905.0" y="533.0" text-anchor="middle" class="ts">Job workers · asyncio tasks</text><rect x="665" y="564" width="480" height="42" rx="9" class="bx2"/><text x="905.0" y="589.0" text-anchor="middle" class="ts">Provider adapters · AI client</text><polyline points="470,184 663,184" class="e e-amber" marker-end="url(#cm-amber)"/><text x="556" y="177" text-anchor="middle" class="lbl l-amber">spawn · stdin: secret</text><polyline points="663,204 470,204" class="e e-amber" marker-end="url(#cm-amber)"/><text x="556" y="222" text-anchor="middle" class="lbl l-amber">stdout: READY port=…</text><polyline points="470,248 663,248" class="e e-violet" stroke-dasharray="5 4" marker-end="url(#cm-violet)"/><text x="556" y="266" text-anchor="middle" class="lbl l-violet">GET /health/ready</text><polyline points="452,536 560,536 560,305 663,305" class="e e-violet" marker-start="url(#cm-violet)" marker-end="url(#cm-violet)"/><text x="568" y="420" text-anchor="start" class="lbl l-violet">fetch() · Bearer</text><text x="568" y="437" text-anchor="start" class="lbl l-violet">loopback HTTP/JSON</text><polyline points="472,40 1110,40 1110,132" class="e e-blue" stroke-dasharray="5 4" marker-end="url(#cm-blue)"/><text x="790" y="33" text-anchor="middle" class="lbl l-blue">OAuth redirect → http://127.0.0.1:&lt;port&gt;/…/callback</text><rect x="640" y="690" width="118" height="60" rx="9" class="bx ext"/><text x="699.0" y="717.0" text-anchor="middle" class="ts">Credential vault</text><text x="699.0" y="733.0" text-anchor="middle" class="tm">keychain · DPAPI · secret svc</text><polyline points="699,630 699,688" class="e e-green" marker-end="url(#cm-green)"/><text x="705" y="664" text-anchor="start" class="lbl l-green">keyring</text><rect x="777" y="690" width="118" height="60" rx="9" class="bx ext"/><text x="836.0" y="717.0" text-anchor="middle" class="ts">SQLite file</text><text x="836.0" y="733.0" text-anchor="middle" class="tm">+ WAL + lock file</text><polyline points="836,630 836,688" class="e e-green" marker-end="url(#cm-green)"/><text x="842" y="664" text-anchor="start" class="lbl l-green">file I/O</text><rect x="914" y="690" width="118" height="60" rx="9" class="bx ext"/><text x="973.0" y="717.0" text-anchor="middle" class="ts">Google / Microsoft</text><text x="973.0" y="733.0" text-anchor="middle" class="tm">Calendar · Graph · Gmail</text><polyline points="973,630 973,688" class="e e-blue" marker-end="url(#cm-blue)"/><text x="979" y="664" text-anchor="start" class="lbl l-blue">HTTPS</text><rect x="1051" y="690" width="118" height="60" rx="9" class="bx ext"/><text x="1110.0" y="717.0" text-anchor="middle" class="ts">Ollama</text><text x="1110.0" y="733.0" text-anchor="middle" class="tm">127.0.0.1:11434</text><polyline points="1110,630 1110,688" class="e e-blue" marker-end="url(#cm-blue)"/><text x="1116" y="664" text-anchor="start" class="lbl l-blue">HTTP</text></svg></div>
+    <figcaption>The Rust core is the only process that starts others and the only one that touches OS UI integration (windows, notifications, opening the browser). The Python sidecar is the only process that touches data: SQLite, the credential vault, providers, and AI. The WebView doesn't touch either directly. It asks Rust for small things over IPC and asks Python for everything else over HTTP.</figcaption>
+  </figure>
+
+  <h3>Why there are two different pipes out of the WebView</h3>
+  <div class="grid">
+    <div class="card"><span class="tag t-cyan">Tauri IPC</span>
+      <p><strong>For:</strong> things only the native shell can do, like getting the backend port and secret, showing an OS notification, opening a URL in the system browser, and hearing about sidecar restarts.</p>
+      <p class="small">It's in-process message passing that Tauri serializes as JSON. It isn't a network socket, so nothing outside the app can reach it.</p></div>
+    <div class="card"><span class="tag t-violet">Loopback HTTP</span>
+      <p><strong>For:</strong> all domain reads and writes (spaces, events, tasks, sync, AI). Python owns the rules, so the WebView talks to Python directly and Rust stays out of the request path.</p>
+      <p class="small">It's a real TCP socket on <code>127.0.0.1</code>, so any local process could try to connect. That's why the bearer secret, the Host check, and CORS exist.</p></div>
+  </div>
+  <div class="callout"><strong>Why not route API calls through Rust?</strong> You could proxy every call as WebView → <code>invoke()</code> → Rust → HTTP → Python, which would avoid CORS entirely. The spec deliberately doesn't. Every endpoint would need a Rust shim, and you'd lose the generated typed client and the browser's standard <code>fetch</code> tooling. Keeping Rust thin means the frontend–backend contract is just OpenAPI.</div>
+
+  <h3>Spec component → process → repo path</h3>
+  <div class="tablewrap"><table>
+    <tr><th>Component</th><th>Runs in</th><th>Repo path</th><th>Talks to</th></tr>
+    <tr><td>Window, menus, tray, single-instance</td><td>Rust core</td><td><code>apps/desktop/src-tauri/src/main.rs</code></td><td>OS</td></tr>
+    <tr><td>Sidecar supervisor + launch secret</td><td>Rust core</td><td><code>src-tauri/src/sidecar.rs</code></td><td>Python via stdin/stdout + <code>/health</code></td></tr>
+    <tr><td>IPC commands (<code>get_backend_config</code>)</td><td>Rust core</td><td><code>src-tauri/src/commands.rs</code></td><td>WebView</td></tr>
+    <tr><td>Permissions for the WebView</td><td>Rust core (build-time)</td><td><code>src-tauri/capabilities/default.json</code></td><td>—</td></tr>
+    <tr><td>Bundled sidecar binaries</td><td>file on disk</td><td><code>src-tauri/binaries/agenda-backend-&lt;target-triple&gt;</code></td><td>—</td></tr>
+    <tr><td>React UI, dashboards, widget registry</td><td>WebView</td><td><code>apps/desktop/src/</code>, <code>src/widgets/</code></td><td>API client, <code>@tauri-apps/api</code></td></tr>
+    <tr><td>Typed API client</td><td>WebView</td><td><code>apps/desktop/src/api/</code></td><td>Python over HTTP</td></tr>
+    <tr><td>Generated TS types + <code>openapi.json</code></td><td>build-time</td><td><code>packages/contracts/</code></td><td>—</td></tr>
+    <tr><td>Process entry, stdin/stdout, uvicorn</td><td>Python sidecar</td><td><code>services/backend/app/main.py</code></td><td>Rust</td></tr>
+    <tr><td>Boundary middleware, app-lock</td><td>Python sidecar</td><td><code>app/core/security.py</code></td><td>—</td></tr>
+    <tr><td>Routes → services → domain → repos</td><td>Python sidecar</td><td><code>app/api/v1/routes</code> → <code>app/application</code> → <code>app/domain</code> → <code>app/repositories</code></td><td>SQLite</td></tr>
+    <tr><td>Job workers, outbox drain</td><td>Python sidecar (asyncio tasks)</td><td><code>app/jobs/</code></td><td>SQLite, adapters</td></tr>
+    <tr><td>Google / Microsoft adapters</td><td>Python sidecar</td><td><code>app/integrations/</code></td><td>Provider HTTPS APIs, OS vault</td></tr>
+  </table></div>
+</section>
+
+<section id="tauri">
+  <div class="section-kicker">02 / Tauri primer</div><h2>Tauri for someone who hasn't used it</h2>
+  <p><strong>Mental model:</strong> a Tauri app is <em>a Rust program that opens a window containing the operating system's own browser engine</em> and loads your built React files into it. On Windows that engine is WebView2 (Edge/Chromium), on macOS it's WKWebView (Safari), and on Linux it's WebKitGTK. Unlike Electron, no browser ships inside the app, which keeps installers small, but you're testing against three engines instead of one.</p>
+  <p>The Rust half has full OS access. The web half is a sandboxed page with <strong>no OS powers at all</strong> except those the Rust half explicitly exposes. Tauri gives you four ways to expose them:</p>
+
+  <h3>1 · Commands: the WebView calls Rust</h3>
+  <p>A Rust function annotated with <code>#[tauri::command]</code> becomes callable from JavaScript through <code>invoke()</code>. Arguments and return values are serialized as JSON using <code>serde</code>. In Agenda the frontend needs this for exactly one thing, learning where the backend is and which secret to send:</p>
+<pre><code><span class="c">// apps/desktop/src-tauri/src/commands.rs</span>
+#[derive(serde::Serialize)]
+pub struct BackendConfig { base_url: String, token: String }
+
+#[tauri::command]
+pub fn get_backend_config(state: tauri::State&lt;'_, BackendState&gt;) -&gt; Result&lt;BackendConfig, String&gt; {
+    let guard = state.0.lock().unwrap();
+    let b = guard.as_ref().ok_or_else(|| "backend not ready".to_string())?;
+    Ok(BackendConfig { base_url: format!("http://127.0.0.1:{}", b.port), token: b.token.clone() })
+}</code></pre>
+<pre><code><span class="c">// apps/desktop/src/api/backend.ts</span>
+import { invoke } from "@tauri-apps/api/core";
+const cfg = await invoke&lt;{ base_url: string; token: string }&gt;("get_backend_config");</code></pre>
+  <p class="small">A <code>Result::Err</code> in Rust becomes a rejected Promise in TypeScript. Commands are registered once with <code>.invoke_handler(tauri::generate_handler![get_backend_config])</code>.</p>
+
+  <h3>2 · Events: Rust pushes to the WebView</h3>
+  <p>A command is request/response and initiated by the page. An event is fire-and-forget and can come from Rust at any time. Agenda uses events for sidecar lifecycle changes, so the UI can show "reconnecting…" and drop a stale port and token.</p>
+<pre><code><span class="c">// Rust</span>
+use tauri::Emitter;
+app.emit("backend:ready", ())?;
+
+<span class="c">// TypeScript</span>
+import { listen } from "@tauri-apps/api/event";
+await listen("backend:ready", () =&gt; resetApiClient());</code></pre>
+
+  <h3>3 · Shared state: <code>app.manage()</code></h3>
+  <p>Rust code that commands need (the current port and secret) lives in a value registered once with <code>.manage(...)</code>. Any command can then ask for it as a <code>tauri::State&lt;T&gt;</code> parameter. It's shared across threads, so wrap mutable parts in a <code>Mutex</code>.</p>
+<pre><code>#[derive(Default)]
+pub struct BackendState(pub std::sync::Mutex&lt;Option&lt;Backend&gt;&gt;);
+pub struct Backend { pub port: u16, pub token: String }</code></pre>
+
+  <h3>4 · Plugins + capabilities: opt-in OS powers</h3>
+  <p>Notifications, opening URLs, spawning processes and so on come from official plugins (<code>tauri-plugin-notification</code>, <code>-opener</code>, <code>-shell</code>, <code>-single-instance</code>). Each plugin has a Rust half that you register and an npm half that you import. In Tauri v2 a page can call a plugin only if a <strong>capability file</strong> grants that permission to that window. This is Tauri's least-privilege boundary.</p>
+<pre><code><span class="c">// apps/desktop/src-tauri/capabilities/default.json</span>
+{
+  "identifier": "default",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "notification:default",
+    "opener:default"
+  ]
+}</code></pre>
+  <div class="callout good">There's deliberately <strong>no <code>shell:*</code> permission</strong> for the page. The Rust side spawns the Python sidecar, and the WebView can never launch processes, even if an XSS bug in the UI let an attacker run JavaScript.</div>
+
+  <h3>The sidecar mechanism</h3>
+  <p>A "sidecar" is Tauri's term for an extra executable that ships inside your app bundle. You list it in <code>tauri.conf.json</code> under <code>bundle.externalBin</code> and build one file per platform with the Rust <strong>target triple</strong> appended to the name. Tauri picks the right one at bundle time.</p>
+<pre><code><span class="c">// apps/desktop/src-tauri/tauri.conf.json (excerpt)</span>
+{
+  "bundle": { "externalBin": ["binaries/agenda-backend"] },
+  "app": {
+    "windows": [{ "label": "main", "title": "Agenda" }],
+    "security": {
+      "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost http://127.0.0.1:*"
+    }
+  }
+}
+
+<span class="c"># files PyInstaller/Nuitka must produce (get yours with: rustc --print host-tuple)</span>
+src-tauri/binaries/agenda-backend-x86_64-pc-windows-msvc.exe
+src-tauri/binaries/agenda-backend-aarch64-apple-darwin
+src-tauri/binaries/agenda-backend-x86_64-unknown-linux-gnu</code></pre>
+  <p>The CSP line matters. <code>connect-src</code> lists the only places page JavaScript may <code>fetch</code>: Tauri's own IPC endpoints plus <code>http://127.0.0.1</code> on any port, because the port is random per launch. Every other origin is blocked by the engine before a request leaves the page.</p>
+</section>
+
+<section id="startup">
+  <div class="section-kicker">03 / Startup handshake</div><h2>How Rust, Python, and the WebView find each other</h2>
+  <p>On every launch the backend gets a random port and a fresh secret. Nothing is written to disk, so the three processes need a handshake to agree on both. The spec describes the steps (§04). This section pins down the exact bytes.</p>
+  <figure>
+    <div class="fig"><svg viewBox="0 0 1100 736" role="img" aria-label="Startup sequence: Rust generates the secret, spawns the sidecar and writes the secret to its stdin; the sidecar announces its port on stdout; Rust waits for /health/ready, then tells the WebView, which fetches the port and token over IPC and calls the API directly." style="min-width:760px"><defs><marker id="st-cyan" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="f-cyan"/></marker><marker id="st-violet" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="f-violet"/></marker><marker id="st-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="f-amber"/></marker><marker id="st-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="f-green"/></marker><marker id="st-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="f-blue"/></marker><marker id="st-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="f-red"/></marker><marker id="st-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="f-muted"/></marker></defs><rect x="88.33333333333334" y="12" width="190" height="46" rx="9" class="bx"/><text x="183.33333333333334" y="32.0" text-anchor="middle" class="ts">Python sidecar</text><text x="183.33333333333334" y="48.0" text-anchor="middle" class="tm">agenda-backend</text><line x1="183.33333333333334" y1="58" x2="183.33333333333334" y2="728" class="life"/><rect x="455.0" y="12" width="190" height="46" rx="9" class="bx"/><text x="550.0" y="32.0" text-anchor="middle" class="ts">Rust core</text><text x="550.0" y="48.0" text-anchor="middle" class="tm">agenda</text><line x1="550.0" y1="58" x2="550.0" y2="728" class="life"/><rect x="821.6666666666667" y="12" width="190" height="46" rx="9" class="bx"/><text x="916.6666666666667" y="32.0" text-anchor="middle" class="ts">WebView</text><text x="916.6666666666667" y="48.0" text-anchor="middle" class="tm">React app</text><line x1="916.6666666666667" y1="58" x2="916.6666666666667" y2="728" class="life"/><rect x="415.9" y="84" width="268.2" height="26" rx="6" class="note n-amber"/><text x="550.0" y="102" text-anchor="middle" class="lbl l-amber">generate 256-bit secret · keep in RAM</text><text x="14" y="104" text-anchor="start" class="step">1</text><polyline points="546.0,144 187.33333333333334,144" class="e e-amber" marker-end="url(#st-amber)"/><text x="366.6666666666667" y="137" text-anchor="middle" class="lbl l-amber">spawn sidecar (bundle.externalBin)</text><text x="14" y="148" text-anchor="start" class="step">2</text><polyline points="546.0,188 187.33333333333334,188" class="e e-amber" marker-end="url(#st-amber)"/><text x="366.6666666666667" y="181" text-anchor="middle" class="lbl l-amber">stdin: &lt;secret&gt;\n</text><text x="14" y="192" text-anchor="start" class="step">3</text><rect x="65.73333333333335" y="216" width="235.2" height="26" rx="6" class="note n-amber"/><text x="183.33333333333334" y="234" text-anchor="middle" class="lbl l-amber">bind 127.0.0.1:0 → OS picks port</text><text x="14" y="236" text-anchor="start" class="step">4</text><polyline points="187.33333333333334,276 546.0,276" class="e e-amber" marker-end="url(#st-amber)"/><text x="366.6666666666667" y="269" text-anchor="middle" class="lbl l-amber">stdout: AGENDA_READY port=51873</text><text x="14" y="280" text-anchor="start" class="step">5</text><polyline points="554.0,320 912.6666666666667,320" class="e e-cyan" marker-end="url(#st-cyan)"/><text x="733.3333333333334" y="313" text-anchor="middle" class="lbl l-cyan">window already loading UI (splash)</text><text x="14" y="324" text-anchor="start" class="step">6</text><polyline points="546.0,364 187.33333333333334,364" class="e e-muted" stroke-dasharray="5 4" marker-end="url(#st-muted)"/><text x="366.6666666666667" y="357" text-anchor="middle" class="lbl l-muted">GET /health/ready → 503 while migrating</text><text x="14" y="368" text-anchor="start" class="step">7</text><rect x="26.133333333333354" y="392" width="314.4" height="26" rx="6" class="note n-green"/><text x="183.33333333333334" y="410" text-anchor="middle" class="lbl l-green">open DB · snapshot · migrate · start workers</text><text x="14" y="412" text-anchor="start" class="step">8</text><polyline points="546.0,452 187.33333333333334,452" class="e e-violet" marker-end="url(#st-violet)"/><text x="366.6666666666667" y="445" text-anchor="middle" class="lbl l-violet">GET /health/ready</text><text x="14" y="456" text-anchor="start" class="step">9</text><polyline points="187.33333333333334,496 546.0,496" class="e e-violet" marker-end="url(#st-violet)"/><text x="366.6666666666667" y="489" text-anchor="middle" class="lbl l-violet">200 ready</text><text x="14" y="500" text-anchor="start" class="step">10</text><polyline points="554.0,540 912.6666666666667,540" class="e e-cyan" marker-end="url(#st-cyan)"/><text x="733.3333333333334" y="533" text-anchor="middle" class="lbl l-cyan">emit(&#x27;backend:ready&#x27;)</text><text x="14" y="544" text-anchor="start" class="step">11</text><polyline points="912.6666666666667,584 554.0,584" class="e e-cyan" marker-end="url(#st-cyan)"/><text x="733.3333333333334" y="577" text-anchor="middle" class="lbl l-cyan">invoke(&#x27;get_backend_config&#x27;)</text><text x="14" y="588" text-anchor="start" class="step">12</text><polyline points="554.0,628 912.6666666666667,628" class="e e-cyan" marker-end="url(#st-cyan)"/><text x="733.3333333333334" y="621" text-anchor="middle" class="lbl l-cyan">{ base_url, token }</text><text x="14" y="632" text-anchor="start" class="step">13</text><polyline points="912.6666666666667,672 187.33333333333334,672" class="e e-violet" marker-end="url(#st-violet)"/><text x="550.0" y="665" text-anchor="middle" class="lbl l-violet">GET /api/v1/setup/status · Bearer &lt;token&gt;</text><text x="14" y="676" text-anchor="start" class="step">14</text></svg></div>
+    <figcaption>Amber is the stdio pipe that exists only between Rust and its child process. The WebView never sees stdin or stdout. It gets the port and token from Rust over IPC (cyan) and then talks to Python directly (violet). Rust is out of the request path after step 14.</figcaption>
+  </figure>
+
+  <div class="grid">
+  <div>
+  <h3>Rust side</h3>
+<pre><code><span class="c">// src-tauri/src/sidecar.rs (core of it)</span>
+use tauri_plugin_shell::{process::CommandEvent, ShellExt};
+
+let token = random_hex_32_bytes();        <span class="c">// 256-bit, RAM only</span>
+let data_dir = app.path().app_data_dir()?;
+let (mut rx, mut child) = app.shell()
+    .sidecar("agenda-backend")?
+    .args(["--data-dir", data_dir.to_str().unwrap()])
+    .spawn()?;
+
+<span class="c">// secret over stdin: argv and env are readable
+// by other local processes; a pipe is not</span>
+child.write(format!("{token}\n").as_bytes())?;
+
+let port = loop {
+    match rx.recv().await {
+        Some(CommandEvent::Stdout(line)) =&gt; {
+            let line = String::from_utf8_lossy(&amp;line);
+            if let Some(p) = line.trim()
+                .strip_prefix("AGENDA_READY port=") {
+                break p.parse::&lt;u16&gt;()?;
+            }
+        }
+        Some(CommandEvent::Stderr(l)) =&gt; log_line(&amp;l),
+        Some(CommandEvent::Terminated(t)) =&gt;
+            anyhow::bail!("exited early: {:?}", t.code),
+        _ =&gt; {}
+    }
+};
+wait_for_ready(port, Duration::from_secs(30)).await?;
+*app.state::&lt;BackendState&gt;().0.lock().unwrap() =
+    Some(Backend { port, token });
+app.emit("backend:ready", ())?;
+<span class="c">// keep reading rx in a task: Terminated → restart (§08)</span></code></pre>
+  </div>
+  <div>
+  <h3>Python side</h3>
+<pre><code><span class="c"># services/backend/app/main.py</span>
+import socket, sys, threading, uvicorn
+from app.api import create_app
+
+def main() -&gt; None:
+    <span class="c"># 1. first line on stdin is the launch secret</span>
+    token = sys.stdin.readline().strip()
+
+    <span class="c"># 2. loopback only; port 0 = "OS, pick a free one"</span>
+    sock = socket.socket()
+    sock.bind(("127.0.0.1", 0))
+    port = sock.getsockname()[1]
+
+    app = create_app(token=token, port=port)
+
+    <span class="c"># 3. the one line Rust is waiting for.
+    #    flush=True: piped stdout is block-buffered</span>
+    print(f"AGENDA_READY port={port}", flush=True)
+
+    server = uvicorn.Server(
+        uvicorn.Config(app, log_config=None))
+
+    <span class="c"># 4. stdin EOF = parent died → shut down,
+    #    so a crashed Rust never leaves an orphan</span>
+    def watch_parent():
+        sys.stdin.read()
+        server.should_exit = True
+    threading.Thread(target=watch_parent,
+                     daemon=True).start()
+
+    server.run(sockets=[sock])</code></pre>
+  <p class="small">Binding the socket yourself, rather than letting uvicorn do it, means the port is known <em>before</em> the server starts. <code>/health/ready</code> returns 503 until the database is open and migrated, and Rust polls it.</p>
+  </div>
+  </div>
+
+  <div class="callout warn"><strong>Rule for the stdout pipe:</strong> once stdout is a protocol channel, nothing else may print to it. Configure all Python logging to go to stderr and a file, and give protocol lines a fixed prefix (<code>AGENDA_READY</code>, <code>AGENDA_EVENT</code>) so Rust can ignore anything unexpected instead of misparsing it.</div>
+</section>
+
+<section id="request">
+  <div class="section-kicker">04 / TypeScript → Python</div><h2>One request, hop by hop</h2>
+  <p>This traces <code>POST /api/v1/spaces/{space_id}/tasks</code>, the example from spec §08, from a button click to a SQLite row and back. Each hop is a place where the request can be stopped, and the figure shows the status you get when it is.</p>
+  <figure>
+    <div class="fig"><svg viewBox="0 0 1100 810" role="img" aria-label="Request path for creating a task: four TypeScript hops in the WebView, one HTTP request over loopback, eight Python hops in the sidecar each able to reject with a specific status, and a typed result back in TypeScript." style="min-width:820px"><defs><marker id="rq-cyan" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="f-cyan"/></marker><marker id="rq-violet" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="f-violet"/></marker><marker id="rq-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="f-amber"/></marker><marker id="rq-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="f-green"/></marker><marker id="rq-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="f-blue"/></marker><marker id="rq-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="f-red"/></marker><marker id="rq-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="f-muted"/></marker></defs><text x="225" y="30" text-anchor="middle" class="colh">TYPESCRIPT · inside the WebView</text><text x="875" y="30" text-anchor="middle" class="colh">PYTHON · inside the sidecar</text><line x1="455" y1="44" x2="455" y2="800" class="wire"/><line x1="645" y1="44" x2="645" y2="800" class="wire"/><text x="550" y="62" text-anchor="middle" class="colh">THE WIRE</text><text x="550" y="78" text-anchor="middle" class="tm">HTTP/1.1 over loopback TCP</text><rect x="60" y="70" width="330" height="48" rx="9" class="bx"/><text x="225.0" y="91.0" text-anchor="middle" class="ts">① Component</text><text x="225.0" y="107.0" text-anchor="middle" class="tm">onSubmit → createTask()</text><rect x="60" y="136" width="330" height="48" rx="9" class="bx"/><text x="225.0" y="157.0" text-anchor="middle" class="ts">② Typed call</text><text x="225.0" y="173.0" text-anchor="middle" class="tm">api.POST(&#x27;/api/v1/spaces/{space_id}/tasks&#x27;)</text><polyline points="225,118 225,134" class="e e-muted" marker-end="url(#rq-muted)"/><rect x="60" y="202" width="330" height="48" rx="9" class="bx"/><text x="225.0" y="223.0" text-anchor="middle" class="ts">③ Client middleware</text><text x="225.0" y="239.0" text-anchor="middle" class="tm">+ Authorization · Idempotency-Key</text><polyline points="225,184 225,200" class="e e-muted" marker-end="url(#rq-muted)"/><rect x="60" y="268" width="330" height="48" rx="9" class="bx"/><text x="225.0" y="289.0" text-anchor="middle" class="ts">④ WebView fetch()</text><text x="225.0" y="305.0" text-anchor="middle" class="tm">CSP connect-src · CORS preflight</text><polyline points="225,250 225,266" class="e e-muted" marker-end="url(#rq-muted)"/><rect x="690" y="266" width="300" height="46" rx="9" class="bx"/><text x="840.0" y="286.0" text-anchor="middle" class="ts">⑤ uvicorn</text><text x="840.0" y="302.0" text-anchor="middle" class="tm">parse HTTP → ASGI scope</text><rect x="690" y="326" width="300" height="46" rx="9" class="bx"/><text x="840.0" y="346.0" text-anchor="middle" class="ts">⑥ CORSMiddleware</text><text x="840.0" y="362.0" text-anchor="middle" class="tm">answers OPTIONS preflight</text><polyline points="840,313 840,324" class="e e-muted" marker-end="url(#rq-muted)"/><polyline points="992,349 1010,349" class="e e-red" marker-end="url(#rq-red)"/><text x="1014" y="353" text-anchor="start" class="lbl l-red">CORS fail</text><rect x="690" y="386" width="300" height="46" rx="9" class="bx"/><text x="840.0" y="406.0" text-anchor="middle" class="ts">⑦ Host check</text><text x="840.0" y="422.0" text-anchor="middle" class="tm">Host == 127.0.0.1:&lt;port&gt;</text><polyline points="840,373 840,384" class="e e-muted" marker-end="url(#rq-muted)"/><polyline points="992,409 1010,409" class="e e-red" marker-end="url(#rq-red)"/><text x="1014" y="413" text-anchor="start" class="lbl l-red">400</text><rect x="690" y="446" width="300" height="46" rx="9" class="bx"/><text x="840.0" y="466.0" text-anchor="middle" class="ts">⑧ Bearer check</text><text x="840.0" y="482.0" text-anchor="middle" class="tm">constant-time compare</text><polyline points="840,433 840,444" class="e e-muted" marker-end="url(#rq-muted)"/><polyline points="992,469 1010,469" class="e e-red" marker-end="url(#rq-red)"/><text x="1014" y="473" text-anchor="start" class="lbl l-red">401</text><rect x="690" y="506" width="300" height="46" rx="9" class="bx"/><text x="840.0" y="526.0" text-anchor="middle" class="ts">⑨ Route + app-lock gate</text><text x="840.0" y="542.0" text-anchor="middle" class="tm">Depends(require_unlocked)</text><polyline points="840,493 840,504" class="e e-muted" marker-end="url(#rq-muted)"/><polyline points="992,529 1010,529" class="e e-red" marker-end="url(#rq-red)"/><text x="1014" y="533" text-anchor="start" class="lbl l-red">401 LOCKED</text><rect x="690" y="566" width="300" height="46" rx="9" class="bx"/><text x="840.0" y="586.0" text-anchor="middle" class="ts">⑩ Pydantic body model</text><text x="840.0" y="602.0" text-anchor="middle" class="tm">TaskCreate validation</text><polyline points="840,553 840,564" class="e e-muted" marker-end="url(#rq-muted)"/><polyline points="992,589 1010,589" class="e e-red" marker-end="url(#rq-red)"/><text x="1014" y="593" text-anchor="start" class="lbl l-red">422</text><rect x="690" y="626" width="300" height="46" rx="9" class="bx"/><text x="840.0" y="646.0" text-anchor="middle" class="ts">⑪ Application service</text><text x="840.0" y="662.0" text-anchor="middle" class="tm">space authz · txn · outbox</text><polyline points="840,613 840,624" class="e e-muted" marker-end="url(#rq-muted)"/><polyline points="992,649 1010,649" class="e e-red" marker-end="url(#rq-red)"/><text x="1014" y="653" text-anchor="start" class="lbl l-red">404 · 409</text><rect x="690" y="686" width="300" height="46" rx="9" class="bx"/><text x="840.0" y="706.0" text-anchor="middle" class="ts">⑫ Repository → SQLite</text><text x="840.0" y="722.0" text-anchor="middle" class="tm">INSERT … RETURNING</text><polyline points="840,673 840,684" class="e e-muted" marker-end="url(#rq-muted)"/><polyline points="992,709 1010,709" class="e e-red" marker-end="url(#rq-red)"/><text x="1014" y="713" text-anchor="start" class="lbl l-red">503</text><polyline points="392,292 688,292" class="e e-violet" marker-end="url(#rq-violet)"/><text x="550" y="284" text-anchor="middle" class="lbl l-violet">POST …/tasks</text><text x="550" y="310" text-anchor="middle" class="lbl l-violet">JSON body + headers</text><rect x="60" y="742" width="330" height="48" rx="9" class="bx hl"/><text x="225.0" y="763.0" text-anchor="middle" class="ts">⑬ Typed result</text><text x="225.0" y="779.0" text-anchor="middle" class="tm">{ data } | { error: ErrorEnvelope }</text><polyline points="840,712 840,766 392,766" class="e e-green" marker-end="url(#rq-green)"/><text x="550" y="758" text-anchor="middle" class="lbl l-green">201 · { data, request_id }</text></svg></div>
+    <figcaption>Hops ①–④ are TypeScript in the WebView. One HTTP request crosses the loopback socket. Hops ⑤–⑫ are Python in the sidecar, and each red tick is a distinct rejection with its own status code. The result in ⑬ is typed from the same OpenAPI schema that defined the Python models.</figcaption>
+  </figure>
+
+  <div class="hop"><div class="n">①②</div><div>
+    <h4>Component and typed call</h4>
+    <p>The component calls a typed client method. The path string, path params, headers, and body are all checked by <code>tsc</code> against the generated <code>paths</code> type. A typo in a field name is a compile error, not a 422 at runtime.</p>
+<pre><code>const { data, error } = await (await api()).POST("/api/v1/spaces/{space_id}/tasks", {
+  params: { path: { space_id: spaceId }, header: { "Idempotency-Key": crypto.randomUUID() } },
+  body: { title: "Take out recycling", due_date: "2026-10-20", rrule: "FREQ=WEEKLY;BYDAY=TU" },
+});
+if (error) showError(error.error.code);   <span class="c">// error is typed as ErrorEnvelope</span></code></pre>
+  </div></div>
+
+  <div class="hop"><div class="n">③</div><div>
+    <h4>Client middleware attaches the secret</h4>
+    <p>The client is created lazily from the IPC config and thrown away whenever Rust says the backend restarted, because a restarted sidecar has a new port <em>and</em> a new token.</p>
+<pre><code><span class="c">// apps/desktop/src/api/backend.ts</span>
+import createClient from "openapi-fetch";
+import type { paths } from "@agenda/contracts";
+
+let client: ReturnType&lt;typeof createClient&lt;paths&gt;&gt; | null = null;
+
+export async function api() {
+  if (!client) {
+    const cfg = await invoke&lt;BackendConfig&gt;("get_backend_config");
+    client = createClient&lt;paths&gt;({ baseUrl: cfg.base_url });
+    client.use({ onRequest({ request }) {
+      request.headers.set("Authorization", `Bearer ${cfg.token}`);
+      return request;
+    }});
+  }
+  return client;
+}
+listen("backend:restarting", () =&gt; { client = null; });</code></pre>
+  </div></div>
+
+  <div class="hop"><div class="n">④</div><div>
+    <h4>WebView <code>fetch()</code>: CSP, then CORS</h4>
+    <p>The page's origin is the Tauri app (<code>tauri://localhost</code> on macOS/Linux, <code>http://tauri.localhost</code> on Windows) and the API is <code>http://127.0.0.1:51873</code>. Those are <strong>different origins</strong>, so the browser engine applies cross-origin rules:</p>
+    <ul>
+      <li><strong>CSP</strong> (from <code>tauri.conf.json</code>) is checked first. If <code>127.0.0.1</code> isn't in <code>connect-src</code>, the request never leaves the page.</li>
+      <li>Because the request carries an <code>Authorization</code> header and a JSON body, it isn't a "simple" request. The engine first sends an <strong><code>OPTIONS</code> preflight</strong> asking "may this origin send these headers?". The real POST goes out only if Python answers yes.</li>
+    </ul>
+    <p class="fails">Fails as: a CORS error in the devtools console, with no status visible to your code. This is the most common "it works in curl but not in the app" bug.</p>
+  </div></div>
+
+  <div class="hop py"><div class="n">⑤⑥</div><div>
+    <h4>uvicorn, then CORS middleware</h4>
+    <p>uvicorn turns bytes into an ASGI request. <code>CORSMiddleware</code> must be the <em>outermost</em> layer, because the preflight <code>OPTIONS</code> carries no <code>Authorization</code> header and would otherwise be rejected by the bearer check. In Starlette/FastAPI the <strong>last middleware added runs first</strong>.</p>
+  </div></div>
+
+  <div class="hop py"><div class="n">⑦⑧</div><div>
+    <h4>Local boundary: Host header and bearer secret</h4>
+<pre><code><span class="c"># services/backend/app/core/security.py</span>
+import hmac
+from fastapi.middleware.cors import CORSMiddleware
+
+TAURI_ORIGINS = ["tauri://localhost", "http://tauri.localhost"]   <span class="c"># macOS/Linux, Windows</span>
+DEV_ORIGINS   = ["http://localhost:5173"]                         <span class="c"># Vite, `tauri dev` only</span>
+
+def install_boundary(app, *, token: str, port: int, dev: bool) -&gt; None:
+    expected_host = f"127.0.0.1:{port}"
+    expected_auth = f"Bearer {token}".encode()
+
+    @app.middleware("http")
+    async def local_boundary(request, call_next):
+        if request.headers.get("host") != expected_host:       <span class="c"># ⑦ DNS-rebinding guard</span>
+            return error_response(400, "BAD_HOST")
+        if not is_public_path(request.url.path):               <span class="c"># /health/*, OAuth callback</span>
+            supplied = request.headers.get("authorization", "").encode()
+            if not hmac.compare_digest(supplied, expected_auth): <span class="c"># ⑧ constant-time</span>
+                return error_response(401, "UNAUTHORIZED")
+        return await call_next(request)
+
+    <span class="c"># added last → runs first → answers preflight before the check above</span>
+    app.add_middleware(CORSMiddleware,
+        allow_origins=TAURI_ORIGINS + (DEV_ORIGINS if dev else []),
+        allow_methods=["GET", "POST", "PATCH", "DELETE"],
+        allow_headers=["Authorization", "Content-Type", "Idempotency-Key", "If-Match"])</code></pre>
+    <p class="small">Why the Host check: a malicious web page in the user's normal browser can point its own domain's DNS at <code>127.0.0.1</code> ("DNS rebinding"). Its requests then arrive with <code>Host: evil.example</code>, so they're rejected here even before the missing token is noticed.</p>
+  </div></div>
+
+  <div class="hop py"><div class="n">⑨⑩</div><div>
+    <h4>Route, app-lock gate, and Pydantic validation</h4>
+    <p>The app-lock gate is a router-level dependency on every domain router, so <code>/auth/unlock</code> stays reachable while the app is locked. FastAPI validates the body against the Pydantic model before your function runs.</p>
+<pre><code>class TaskCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    notes: str | None = None
+    due_date: date | None = None
+    rrule: str | None = None
+    assignee_person_id: UUID | None = None
+
+router = APIRouter(prefix="/api/v1", dependencies=[Depends(require_unlocked)])
+
+@router.post("/spaces/{space_id}/tasks", status_code=201,
+             response_model=Envelope[TaskOut],
+             responses={404: {"model": ErrorEnvelope}, 409: {"model": ErrorEnvelope}})
+async def create_task(space_id: UUID, body: TaskCreate,
+                      ctx: RequestContext = Depends(request_context),
+                      idempotency_key: str | None = Header(default=None)):
+    task = await tasks.create(ctx, space_id, body, idempotency_key)
+    return Envelope(data=task, request_id=ctx.request_id)</code></pre>
+    <div class="callout warn" style="margin-top:10px"><strong>Gotcha:</strong> FastAPI only documents error responses you declare in <code>responses=</code>. If you leave them out, the generated TypeScript won't know a 404 returns <code>ErrorEnvelope</code>, and <code>error</code> will be typed as <code>unknown</code>. Register an exception handler that converts <code>RequestValidationError</code> into the spec's error envelope, too.</div>
+  </div></div>
+
+  <div class="hop py"><div class="n">⑪⑫</div><div>
+    <h4>Application service and repository</h4>
+    <p>This is where the real rules live: the space is resolved from the <em>URL</em> and checked against the actor, the assignee must belong to the same space, and the row and its outbox event are committed in one SQLite transaction.</p>
+<pre><code>async def create(ctx, space_id, body, idem_key) -&gt; Task:
+    async with ctx.unit_of_work() as uow:                       <span class="c"># one short write txn</span>
+        space = await uow.spaces.get_accessible(space_id, ctx.actor)        <span class="c"># 404 if not</span>
+        if body.assignee_person_id:
+            await uow.people.require_in_space(body.assignee_person_id, space.id)  <span class="c"># 422</span>
+        task = await uow.tasks.add(Task.new(space.id, ctx.actor, body))
+        await uow.outbox.add("task.created", aggregate=task)      <span class="c"># same txn</span>
+    return task</code></pre>
+  </div></div>
+
+  <div class="hop"><div class="n">⑬</div><div>
+    <h4>Back in TypeScript</h4>
+    <p><code>openapi-fetch</code> returns <code>{ data }</code> for 2xx and <code>{ error }</code> otherwise. It never throws on HTTP errors, only on network failure. Treat a network failure as "backend unavailable" and wait for <code>backend:ready</code>, rather than showing an error per widget.</p>
+  </div></div>
+</section>
+
+<section id="contract">
+  <div class="section-kicker">05 / The type contract</div><h2>One schema, two languages</h2>
+  <p>Python is the source of truth. The TypeScript types are generated from it and are never written by hand, so a rename on one side can't silently break the other.</p>
+  <figure>
+    <div class="fig"><svg viewBox="0 0 1100 220" role="img" aria-label="Contract pipeline: Pydantic models produce an OpenAPI document, which is committed and turned into TypeScript types; CI regenerates and fails on any difference." style="min-width:820px"><defs><marker id="ct-cyan" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="f-cyan"/></marker><marker id="ct-violet" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="f-violet"/></marker><marker id="ct-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="f-amber"/></marker><marker id="ct-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="f-green"/></marker><marker id="ct-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="f-blue"/></marker><marker id="ct-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="f-red"/></marker><marker id="ct-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="f-muted"/></marker></defs><rect x="10" y="30" width="190" height="58" rx="9" class="bx"/><text x="105.0" y="56.0" text-anchor="middle" class="ts">Pydantic models</text><text x="105.0" y="72.0" text-anchor="middle" class="tm">services/backend/app</text><polyline points="202,59 228,59" class="e e-muted" marker-end="url(#ct-muted)"/><rect x="230" y="30" width="190" height="58" rx="9" class="bx"/><text x="325.0" y="56.0" text-anchor="middle" class="ts">app.openapi()</text><text x="325.0" y="72.0" text-anchor="middle" class="tm">scripts/export_openapi.py</text><polyline points="422,59 448,59" class="e e-muted" marker-end="url(#ct-muted)"/><rect x="450" y="30" width="190" height="58" rx="9" class="bx hl"/><text x="545.0" y="56.0" text-anchor="middle" class="ts">openapi.json</text><text x="545.0" y="72.0" text-anchor="middle" class="tm">packages/contracts (committed)</text><polyline points="642,59 668,59" class="e e-muted" marker-end="url(#ct-muted)"/><rect x="670" y="30" width="190" height="58" rx="9" class="bx"/><text x="765.0" y="56.0" text-anchor="middle" class="ts">openapi-typescript</text><text x="765.0" y="72.0" text-anchor="middle" class="tm">codegen → schema.d.ts</text><polyline points="862,59 888,59" class="e e-muted" marker-end="url(#ct-muted)"/><rect x="890" y="30" width="190" height="58" rx="9" class="bx"/><text x="985.0" y="56.0" text-anchor="middle" class="ts">tsc + openapi-fetch</text><text x="985.0" y="72.0" text-anchor="middle" class="tm">apps/desktop/src/api</text><text x="215" y="108" text-anchor="middle" class="lbl l-muted">introspect</text><text x="435" y="108" text-anchor="middle" class="lbl l-muted">export</text><text x="655" y="108" text-anchor="middle" class="lbl l-muted">read</text><text x="875" y="108" text-anchor="middle" class="lbl l-muted">import types</text><text x="590" y="142" text-anchor="middle" class="lbl l-red">drift = compile error: a renamed Python field breaks the TS build, not the running app</text><rect x="235" y="172" width="630" height="34" rx="8" class="note n-amber"/><text x="550" y="194" text-anchor="middle" class="lbl l-amber">CI: regenerate both files → git diff --exit-code packages/contracts</text></svg></div>
+    <figcaption>The committed <code>openapi.json</code> is the handshake between the two codebases. Regenerating it in CI turns any mismatch into a failed build.</figcaption>
+  </figure>
+<pre><code><span class="c"># services/backend/scripts/export_openapi.py</span>
+import json; from app.api import create_app
+json.dump(create_app(token="unused", port=0).openapi(),
+          open("../../packages/contracts/openapi.json", "w"), indent=2, sort_keys=True)
+
+<span class="c"># packages/contracts/package.json → "generate"</span>
+npx openapi-typescript openapi.json -o src/schema.d.ts
+
+<span class="c"># CI step</span>
+python scripts/export_openapi.py &amp;&amp; npm -w packages/contracts run generate
+git diff --exit-code packages/contracts</code></pre>
+  <p class="small"><code>openapi-typescript</code> produces types only, with zero runtime cost. <code>openapi-fetch</code> is a ~6 kB wrapper around <code>fetch</code> that uses those types. Pydantic field constraints (<code>min_length</code>, formats) appear in the schema but aren't enforced in TS. The server is still the validator.</p>
+</section>
+
+<section id="reverse">
+  <div class="section-kicker">06 / Backend → frontend</div><h2>When Python has something to say</h2>
+  <p>HTTP only flows WebView → Python, so Python can't call the UI. The spec covers this with three mechanisms:</p>
+  <div class="tablewrap"><table>
+    <tr><th>Need</th><th>Mechanism</th><th>Path</th></tr>
+    <tr><td>"Is my sync / AI job done?"</td><td>Poll</td><td><code>POST …/sync</code> → <code>{job_id}</code>, then <code>GET /jobs/{id}</code> every 1–2s while a spinner is visible</td></tr>
+    <tr><td>Live dashboard updates</td><td>Server-Sent Events (later)</td><td><code>GET /api/v1/stream</code> → <code>EventSource</code>. It's one-way, uses plain HTTP, and passes through the same middleware. <code>EventSource</code> can't set headers, so use <code>fetch</code> streaming or a short-lived query token.</td></tr>
+    <tr><td>OS notification (reminder due)</td><td>See below</td><td>The decision isn't in the spec yet</td></tr>
+  </table></div>
+  <h3>Delivering OS notifications: the open decision</h3>
+  <p>The spec says reminders go out "via Tauri", but only Rust can call the notification plugin and only Python knows when a reminder is due. Something has to relay the message:</p>
+  <figure>
+    <div class="fig"><svg viewBox="0 0 1100 272" role="img" aria-label="Two ways to deliver OS notifications: A has the WebView poll the API and call the notification plugin; B has the sidecar write an event line to stdout that Rust reads and shows directly, which does not depend on a hidden WebView&#x27;s timers." style="min-width:820px"><defs><marker id="nt-cyan" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="f-cyan"/></marker><marker id="nt-violet" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="f-violet"/></marker><marker id="nt-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="f-amber"/></marker><marker id="nt-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="f-green"/></marker><marker id="nt-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="f-blue"/></marker><marker id="nt-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="f-red"/></marker><marker id="nt-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="f-muted"/></marker></defs><rect x="10" y="10" width="530" height="250" rx="14" class="boundary"/><text x="30" y="36" text-anchor="start" class="pt mutedt">A · WebView relays</text><rect x="40" y="60" width="150" height="50" rx="9" class="bx"/><text x="115.0" y="82.0" text-anchor="middle" class="ts">Python sidecar</text><text x="115.0" y="98.0" text-anchor="middle" class="tm">reminder planner</text><rect x="360" y="60" width="150" height="50" rx="9" class="bx"/><text x="435.0" y="82.0" text-anchor="middle" class="ts">WebView</text><text x="435.0" y="98.0" text-anchor="middle" class="tm">React</text><rect x="40" y="180" width="150" height="50" rx="9" class="bx"/><text x="115.0" y="202.0" text-anchor="middle" class="ts">Rust core</text><text x="115.0" y="218.0" text-anchor="middle" class="tm">notification plugin</text><rect x="360" y="180" width="150" height="50" rx="9" class="bx ext"/><text x="435.0" y="209.0" text-anchor="middle" class="ts">OS notification</text><rect x="570" y="10" width="530" height="250" rx="14" class="boundary hlb"/><text x="590" y="36" text-anchor="start" class="pt">B · Rust relays via stdout  · recommended</text><rect x="600" y="60" width="150" height="50" rx="9" class="bx"/><text x="675.0" y="82.0" text-anchor="middle" class="ts">Python sidecar</text><text x="675.0" y="98.0" text-anchor="middle" class="tm">reminder planner</text><rect x="920" y="60" width="150" height="50" rx="9" class="bx"/><text x="995.0" y="82.0" text-anchor="middle" class="ts">WebView</text><text x="995.0" y="98.0" text-anchor="middle" class="tm">React</text><rect x="600" y="180" width="150" height="50" rx="9" class="bx"/><text x="675.0" y="202.0" text-anchor="middle" class="ts">Rust core</text><text x="675.0" y="218.0" text-anchor="middle" class="tm">notification plugin</text><rect x="920" y="180" width="150" height="50" rx="9" class="bx ext"/><text x="995.0" y="209.0" text-anchor="middle" class="ts">OS notification</text><polyline points="358,76 192,76" class="e e-violet" marker-end="url(#nt-violet)"/><text x="275" y="70" text-anchor="middle" class="lbl l-violet">poll GET /notifications</text><polyline points="358,102 192,190" class="e e-cyan" marker-end="url(#nt-cyan)"/><text x="300" y="176" text-anchor="start" class="lbl l-cyan">sendNotification()</text><polyline points="192,205 358,205" class="e e-cyan" marker-end="url(#nt-cyan)"/><text x="275" y="222" text-anchor="middle" class="lbl l-cyan">show</text><text x="435" y="135" text-anchor="middle" class="lbl l-red">JS timers may be</text><text x="435" y="150" text-anchor="middle" class="lbl l-red">throttled when hidden</text><polyline points="675,112 675,178" class="e e-amber" marker-end="url(#nt-amber)"/><text x="685" y="140" text-anchor="start" class="lbl l-amber">stdout: AGENDA_EVENT notify</text><polyline points="752,205 918,205" class="e e-cyan" marker-end="url(#nt-cyan)"/><text x="835" y="222" text-anchor="middle" class="lbl l-cyan">show</text><polyline points="918,85 752,85" class="e e-violet" stroke-dasharray="5 4" marker-end="url(#nt-violet)"/><text x="835" y="78" text-anchor="middle" class="lbl l-violet">in-app inbox: REST</text></svg></div>
+    <figcaption>Option A adds a polling loop in the UI and depends on a WebView that may be hidden or minimised to the tray, where engines throttle timers. Option B reuses the stdout pipe that already exists and is already supervised, so delivery doesn't depend on the UI being awake.</figcaption>
+  </figure>
+<pre><code><span class="c"># Python: one JSON line per event</span>
+print("AGENDA_EVENT " + json.dumps({"type": "notify", "id": n.id, "title": n.title, "body": n.body}), flush=True)
+
+<span class="c">// Rust: in the same rx loop that watches for Terminated</span>
+if let Some(json) = line.strip_prefix("AGENDA_EVENT ") {
+    let ev: SidecarEvent = serde_json::from_str(json)?;
+    if let SidecarEvent::Notify { title, body, .. } = ev {
+        app.notification().builder().title(title).body(body).show()?;
+    }
+}</code></pre>
+  <p class="small">Recommendation: <strong>B</strong> for OS delivery, with REST for the in-app inbox (read/dismiss). Never put secrets or email content in an event line. Spec §09 already forbids that in payloads.</p>
+</section>
+
+<section id="oauth">
+  <div class="section-kicker">07 / OAuth across processes</div><h2>Connecting a Google or Microsoft account</h2>
+  <p>OAuth involves all three processes plus two outsiders. The sidecar does the protocol work, Rust only opens the browser, and the browser hands the result back to the sidecar's loopback port.</p>
+  <figure>
+    <div class="fig"><svg viewBox="0 0 1100 666" role="img" aria-label="OAuth sequence: the WebView asks the sidecar for an authorization URL, Rust opens it in the system browser, the provider redirects the browser to the sidecar&#x27;s loopback callback, and the sidecar exchanges the code and stores the refresh token in the OS vault." style="min-width:860px"><defs><marker id="oa-cyan" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="f-cyan"/></marker><marker id="oa-violet" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="f-violet"/></marker><marker id="oa-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="f-amber"/></marker><marker id="oa-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="f-green"/></marker><marker id="oa-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="f-blue"/></marker><marker id="oa-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="f-red"/></marker><marker id="oa-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="f-muted"/></marker></defs><rect x="15.0" y="12" width="190" height="46" rx="9" class="bx"/><text x="110.0" y="32.0" text-anchor="middle" class="ts">WebView</text><text x="110.0" y="48.0" text-anchor="middle" class="tm">React</text><line x1="110.0" y1="58" x2="110.0" y2="658" class="life"/><rect x="235.0" y="12" width="190" height="46" rx="9" class="bx"/><text x="330.0" y="32.0" text-anchor="middle" class="ts">Rust core</text><text x="330.0" y="48.0" text-anchor="middle" class="tm">opener plugin</text><line x1="330.0" y1="58" x2="330.0" y2="658" class="life"/><rect x="455.0" y="12" width="190" height="46" rx="9" class="bx"/><text x="550.0" y="32.0" text-anchor="middle" class="ts">Python sidecar</text><text x="550.0" y="48.0" text-anchor="middle" class="tm">FastAPI</text><line x1="550.0" y1="58" x2="550.0" y2="658" class="life"/><rect x="675.0" y="12" width="190" height="46" rx="9" class="bx"/><text x="770.0" y="32.0" text-anchor="middle" class="ts">System browser</text><text x="770.0" y="48.0" text-anchor="middle" class="tm">user&#x27;s default</text><line x1="770.0" y1="58" x2="770.0" y2="658" class="life"/><rect x="895.0" y="12" width="190" height="46" rx="9" class="bx"/><text x="990.0" y="32.0" text-anchor="middle" class="ts">Provider</text><text x="990.0" y="48.0" text-anchor="middle" class="tm">Google / Microsoft</text><line x1="990.0" y1="58" x2="990.0" y2="658" class="life"/><polyline points="114.0,100 546.0,100" class="e e-violet" marker-end="url(#oa-violet)"/><text x="330.0" y="93" text-anchor="middle" class="lbl l-violet">POST …/connect/start</text><text x="14" y="104" text-anchor="start" class="step">1</text><rect x="452.2" y="126" width="195.6" height="26" rx="6" class="note n-violet"/><text x="550.0" y="144" text-anchor="middle" class="lbl l-violet">make state + PKCE verifier</text><text x="14" y="146" text-anchor="start" class="step">2</text><polyline points="546.0,184 114.0,184" class="e e-violet" marker-end="url(#oa-violet)"/><text x="330.0" y="177" text-anchor="middle" class="lbl l-violet">{ authorization_url }</text><text x="14" y="188" text-anchor="start" class="step">3</text><polyline points="114.0,226 326.0,226" class="e e-cyan" marker-end="url(#oa-cyan)"/><text x="220.0" y="219" text-anchor="middle" class="lbl l-cyan">openUrl(url)</text><text x="14" y="230" text-anchor="start" class="step">4</text><polyline points="334.0,268 766.0,268" class="e e-cyan" marker-end="url(#oa-cyan)"/><text x="550.0" y="261" text-anchor="middle" class="lbl l-cyan">launch browser</text><text x="14" y="272" text-anchor="start" class="step">5</text><polyline points="774.0,310 986.0,310" class="e e-blue" marker-end="url(#oa-blue)"/><text x="880.0" y="303" text-anchor="middle" class="lbl l-blue">sign in + consent</text><text x="14" y="314" text-anchor="start" class="step">6</text><polyline points="986.0,352 774.0,352" class="e e-blue" marker-end="url(#oa-blue)"/><text x="880.0" y="345" text-anchor="middle" class="lbl l-blue">302 → 127.0.0.1:&lt;port&gt;/callback</text><text x="14" y="356" text-anchor="start" class="step">7</text><polyline points="766.0,394 554.0,394" class="e e-blue" marker-end="url(#oa-blue)"/><text x="660.0" y="387" text-anchor="middle" class="lbl l-blue">GET /callback?code&amp;state</text><text x="14" y="398" text-anchor="start" class="step">8</text><rect x="472.0" y="420" width="156.0" height="26" rx="6" class="note n-violet"/><text x="550.0" y="438" text-anchor="middle" class="lbl l-violet">check one-time state</text><text x="14" y="440" text-anchor="start" class="step">9</text><polyline points="554.0,478 986.0,478" class="e e-blue" marker-end="url(#oa-blue)"/><text x="770.0" y="471" text-anchor="middle" class="lbl l-blue">POST /token (code + verifier)</text><text x="14" y="482" text-anchor="start" class="step">10</text><polyline points="986.0,520 554.0,520" class="e e-blue" marker-end="url(#oa-blue)"/><text x="770.0" y="513" text-anchor="middle" class="lbl l-blue">access + refresh token</text><text x="14" y="524" text-anchor="start" class="step">11</text><rect x="458.8" y="546" width="182.39999999999998" height="26" rx="6" class="note n-green"/><text x="550.0" y="564" text-anchor="middle" class="lbl l-green">refresh token → OS vault</text><text x="14" y="566" text-anchor="start" class="step">12</text><polyline points="114.0,604 546.0,604" class="e e-violet" marker-end="url(#oa-violet)"/><text x="330.0" y="597" text-anchor="middle" class="lbl l-violet">GET /external-accounts (poll)</text><text x="14" y="608" text-anchor="start" class="step">13</text></svg></div>
+    <figcaption>The callback (step 8) is the only request that reaches the sidecar <em>without</em> the bearer secret. The system browser doesn't have the secret. That's why it's protected by a one-time <code>state</code> value and PKCE instead, and why the boundary middleware treats it as a public path.</figcaption>
+  </figure>
+  <ul>
+    <li><strong>Why the system browser:</strong> Google blocks sign-in inside embedded webviews, and users can see the real URL bar there.</li>
+    <li><strong>Which port:</strong> the sidecar's own random API port works. Both Google (desktop client type) and Microsoft accept any port on a loopback redirect URI.</li>
+    <li><strong>Afterwards:</strong> the browser tab shows a static "You can close this window" page served by the sidecar, and the UI learns the outcome by polling <code>GET /external-accounts</code> (or by listening on SSE later).</li>
+  </ul>
+</section>
+
+<section id="failure">
+  <div class="section-kicker">08 / Crashes &amp; restarts</div><h2>What happens when the sidecar dies</h2>
+  <figure>
+    <div class="fig"><svg viewBox="0 0 1100 180" role="img" aria-label="Sidecar supervisor states: spawning, ready, crashed, backoff and failed; each respawn uses a new secret and port and tells the WebView to refresh its config." style="min-width:820px"><defs><marker id="sv-cyan" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="f-cyan"/></marker><marker id="sv-violet" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="f-violet"/></marker><marker id="sv-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="f-amber"/></marker><marker id="sv-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="f-green"/></marker><marker id="sv-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="f-blue"/></marker><marker id="sv-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="f-red"/></marker><marker id="sv-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="f-muted"/></marker></defs><rect x="20" y="60" width="180" height="56" rx="9" class="bx"/><text x="110.0" y="85.0" text-anchor="middle" class="ts">Spawning</text><text x="110.0" y="101.0" text-anchor="middle" class="tm">new secret + port</text><rect x="240" y="60" width="180" height="56" rx="9" class="bx hl"/><text x="330.0" y="85.0" text-anchor="middle" class="ts">Ready</text><text x="330.0" y="101.0" text-anchor="middle" class="tm">/health/ready = 200</text><rect x="460" y="60" width="180" height="56" rx="9" class="bx bad"/><text x="550.0" y="85.0" text-anchor="middle" class="ts">Crashed</text><text x="550.0" y="101.0" text-anchor="middle" class="tm">CommandEvent::Terminated</text><rect x="680" y="60" width="180" height="56" rx="9" class="bx"/><text x="770.0" y="85.0" text-anchor="middle" class="ts">Backoff</text><text x="770.0" y="101.0" text-anchor="middle" class="tm">1s · 2s · 4s … ≤ 5 tries</text><rect x="900" y="60" width="180" height="56" rx="9" class="bx bad"/><text x="990.0" y="85.0" text-anchor="middle" class="ts">Failed</text><text x="990.0" y="101.0" text-anchor="middle" class="tm">recovery screen</text><polyline points="202,88 238,88" class="e e-green" marker-end="url(#sv-green)"/><polyline points="422,88 458,88" class="e e-red" marker-end="url(#sv-red)"/><polyline points="642,88 678,88" class="e e-amber" marker-end="url(#sv-amber)"/><polyline points="862,88 898,88" class="e e-red" marker-end="url(#sv-red)"/><text x="880" y="50" text-anchor="middle" class="lbl l-red">retries used up</text><polyline points="770,118 770,160 110,160 110,118" class="e e-amber" marker-end="url(#sv-amber)"/><text x="440" y="152" text-anchor="middle" class="lbl l-amber">respawn → emit(&#x27;backend:restarting&#x27;) → WebView drops cached client</text><text x="220" y="50" text-anchor="middle" class="lbl l-green">READY line + health</text><text x="440" y="50" text-anchor="middle" class="lbl l-red">process exits</text></svg></div>
+    <figcaption>The supervisor in Rust owns this state machine. Every respawn repeats the full handshake from §03, with a new secret and a new port.</figcaption>
+  </figure>
+  <div class="grid">
+    <div class="card"><h4 style="margin-top:0">Sidecar crashes</h4><p>Rust's <code>rx</code> loop receives <code>CommandEvent::Terminated</code>. It clears <code>BackendState</code>, emits <code>backend:restarting</code> (the UI drops its client and shows a banner), backs off, and respawns. Jobs that were mid-flight are reclaimed by lease expiry (spec §09).</p></div>
+    <div class="card"><h4 style="margin-top:0">Rust crashes</h4><p>The OS closes the sidecar's stdin pipe. <code>watch_parent()</code> sees EOF and stops uvicorn gracefully, so the DB lock file is released and the next launch starts cleanly.</p></div>
+    <div class="card"><h4 style="margin-top:0">Second launch</h4><p><code>tauri-plugin-single-instance</code> catches it in the new process, focuses the existing window, and exits before any sidecar spawns. The DB lock file is a second line of defense.</p></div>
+    <div class="card"><h4 style="margin-top:0">Normal quit</h4><p>On <code>RunEvent::ExitRequested</code>, Rust closes the sidecar's stdin (the same EOF path), waits up to N seconds for exit, then calls <code>child.kill()</code>. Python's shutdown drains workers and checkpoints the WAL.</p></div>
+  </div>
+</section>
+
+<section id="dev">
+  <div class="section-kicker">09 / Dev-mode wiring</div><h2>What changes under <code>tauri dev</code></h2>
+  <p><code>tauri dev</code> starts Vite at <code>http://localhost:5173</code> with hot reload and points the window at it, so the page origin becomes <code>http://localhost:5173</code>. That's why the CORS allow-list gets a dev entry. Rebuilding a PyInstaller binary for every Python change would be painful, so debug builds should run the backend straight from its venv:</p>
+<pre><code>#[cfg(debug_assertions)]
+let cmd = app.shell()
+    .command("../../../services/backend/.venv/bin/python")   <span class="c">// .venv\Scripts\python.exe on Windows</span>
+    .args(["-m", "app.main", "--dev", "--data-dir", dev_dir])
+    .current_dir("../../../services/backend");
+#[cfg(not(debug_assertions))]
+let cmd = app.shell().sidecar("agenda-backend")?.args(["--data-dir", data_dir]);</code></pre>
+  <p>Everything else (stdin secret, <code>AGENDA_READY</code>, health polling) stays identical, so dev exercises the real handshake. For backend-only work, run <code>python -m app.main --dev</code> by hand, type any token on stdin, and use curl with <code>-H "Authorization: Bearer &lt;that token&gt;"</code>.</p>
+</section>
+
+<section id="gaps">
+  <div class="section-kicker">10 / Gaps to fold into the spec</div><h2>Decisions this document had to make</h2>
+  <p>Writing the component map surfaced details that <a href="Agenda_Top.html">the spec</a> implies but doesn't pin down. Each should become a sentence in spec §04, §06, or §09, or an ADR.</p>
+  <div class="tablewrap"><table>
+    <tr><th>Gap</th><th>Proposed answer</th><th>Spec section</th></tr>
+    <tr><td>Format of the stdout "port report"</td><td>Line protocol with fixed prefixes: <code>AGENDA_READY port=&lt;n&gt;</code>, <code>AGENDA_EVENT &lt;json&gt;</code>. Logs go only to stderr or a file.</td><td>§04</td></tr>
+    <tr><td>Secret and port after a sidecar restart</td><td>Both rotate on every spawn. Rust emits <code>backend:restarting</code> / <code>backend:ready</code>, and the UI re-fetches config.</td><td>§04, §06</td></tr>
+    <tr><td>Exact allowed origins for CORS</td><td><code>tauri://localhost</code> (macOS/Linux), <code>http://tauri.localhost</code> (Windows), plus <code>http://localhost:5173</code> in dev builds only.</td><td>§06</td></tr>
+    <tr><td>CSP for the WebView</td><td><code>connect-src ipc: http://ipc.localhost http://127.0.0.1:*</code>; nothing else.</td><td>§06</td></tr>
+    <tr><td>Orphan sidecar if Rust crashes</td><td>Sidecar treats stdin EOF as parent death and shuts down.</td><td>§04</td></tr>
+    <tr><td>How reminders reach the OS</td><td>Sidecar emits <code>AGENDA_EVENT notify</code> on stdout, and Rust shows it with the notification plugin (option B, §06 here).</td><td>§09</td></tr>
+    <tr><td>Middleware order</td><td>CORS outermost, then Host, then bearer. App-lock is a router dependency, not middleware.</td><td>§06</td></tr>
+    <tr><td>Error types in generated TS</td><td>Every route declares its <code>ErrorEnvelope</code> responses, and CI checks it.</td><td>§07–08</td></tr>
+  </table></div>
+</section>
+
+<section id="glossary">
+  <div class="section-kicker">11 / Glossary</div><h2>Terms used above</h2>
+  <div class="tablewrap"><table>
+    <tr><td><strong>IPC</strong></td><td>Inter-process communication. In Tauri, the <code>invoke</code> and event bridge between page JavaScript and Rust.</td></tr>
+    <tr><td><strong>Sidecar</strong></td><td>An extra executable bundled with the app and launched by it. Here, the frozen Python backend.</td></tr>
+    <tr><td><strong>externalBin</strong></td><td>The <code>tauri.conf.json</code> key listing sidecars. Each file is suffixed with a Rust target triple.</td></tr>
+    <tr><td><strong>Target triple</strong></td><td>Rust's platform name, e.g. <code>aarch64-apple-darwin</code>: CPU, vendor, OS (and ABI).</td></tr>
+    <tr><td><strong>Capability</strong></td><td>A Tauri v2 JSON file granting specific plugin permissions to specific windows.</td></tr>
+    <tr><td><strong>Loopback</strong></td><td>The <code>127.0.0.1</code> interface. Traffic never leaves the machine, but any local process can connect.</td></tr>
+    <tr><td><strong>Origin</strong></td><td>Scheme + host + port of a page. <code>tauri://localhost</code> and <code>http://127.0.0.1:51873</code> are different origins.</td></tr>
+    <tr><td><strong>CORS preflight</strong></td><td>The <code>OPTIONS</code> request a browser engine sends before a cross-origin request with custom headers.</td></tr>
+    <tr><td><strong>CSP</strong></td><td>Content Security Policy. Page-level rules for where scripts may load from and connect to.</td></tr>
+    <tr><td><strong>Bearer token</strong></td><td><code>Authorization: Bearer &lt;value&gt;</code>. Whoever holds the value is trusted. Here, the per-launch secret.</td></tr>
+    <tr><td><strong>ASGI / uvicorn</strong></td><td>The Python async web-server interface, and the server that implements it and runs FastAPI.</td></tr>
+    <tr><td><strong>OpenAPI</strong></td><td>A JSON description of every endpoint and schema. FastAPI generates it, and TS types are generated from it.</td></tr>
+    <tr><td><strong>PKCE</strong></td><td>Proof Key for Code Exchange. It stops an intercepted OAuth code from being used by anyone but the app that started the flow.</td></tr>
+    <tr><td><strong>WAL</strong></td><td>SQLite write-ahead log mode. Readers don't block the single writer.</td></tr>
+  </table></div>
+</section>
+
+</main>
+</div>
+<footer><div class="wrap">AGENDA / COMPONENT MAP · companion to <a href="Agenda_Top.html">Engineering Spec v1.0-draft</a> · Design-stage document. Validate code shapes against current Tauri v2, FastAPI, and openapi-fetch documentation during Phase 0.</div></footer>
+</body>
+</html>
