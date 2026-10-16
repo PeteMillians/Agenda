@@ -16,3 +16,15 @@ Thumbs.db
 data/
 # Windows download markers
 *:Zone.Identifier
+
+# Python
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+
+# Rust / Tauri
+target/
+
+# Sidecar executables built by packaging/build_sidecar.py
+apps/desktop/src-tauri/binaries/

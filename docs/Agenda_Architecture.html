@@ -427,7 +427,7 @@ import hmac
 from fastapi.middleware.cors import CORSMiddleware
 
 TAURI_ORIGINS = ["tauri://localhost", "http://tauri.localhost"]   <span class="c"># macOS/Linux, Windows</span>
-DEV_ORIGINS   = ["http://localhost:5173"]                         <span class="c"># Vite, `tauri dev` only</span>
+DEV_ORIGINS   = ["http://localhost:1420"]                         <span class="c"># Vite, `tauri dev` only</span>
 
 def install_boundary(app, *, token: str, port: int, dev: bool) -&gt; None:
     expected_host = f"127.0.0.1:{port}"
@@ -572,7 +572,7 @@ if let Some(json) = line.strip_prefix("AGENDA_EVENT ") {
 
 <section id="dev">
   <div class="section-kicker">09 / Dev-mode wiring</div><h2>What changes under <code>tauri dev</code></h2>
-  <p><code>tauri dev</code> starts Vite at <code>http://localhost:5173</code> with hot reload and points the window at it, so the page origin becomes <code>http://localhost:5173</code>. That's why the CORS allow-list gets a dev entry. Rebuilding a PyInstaller binary for every Python change would be painful, so debug builds should run the backend straight from its venv:</p>
+  <p><code>tauri dev</code> starts Vite at <code>http://localhost:1420</code> with hot reload and points the window at it, so the page origin becomes <code>http://localhost:1420</code>. That's why the CORS allow-list gets a dev entry. Rebuilding a PyInstaller binary for every Python change would be painful, so debug builds should run the backend straight from its venv:</p>
 <pre><code>#[cfg(debug_assertions)]
 let cmd = app.shell()
     .command("../../../services/backend/.venv/bin/python")   <span class="c">// .venv\Scripts\python.exe on Windows</span>
@@ -590,7 +590,7 @@ let cmd = app.shell().sidecar("agenda-backend")?.args(["--data-dir", data_dir]);
     <tr><th>Gap</th><th>Proposed answer</th><th>Spec section</th></tr>
     <tr><td>Format of the stdout "port report"</td><td>Line protocol with fixed prefixes: <code>AGENDA_READY port=&lt;n&gt;</code>, <code>AGENDA_EVENT &lt;json&gt;</code>. Logs go only to stderr or a file.</td><td>§04</td></tr>
     <tr><td>Secret and port after a sidecar restart</td><td>Both rotate on every spawn. Rust emits <code>backend:restarting</code> / <code>backend:ready</code>, and the UI re-fetches config.</td><td>§04, §06</td></tr>
-    <tr><td>Exact allowed origins for CORS</td><td><code>tauri://localhost</code> (macOS/Linux), <code>http://tauri.localhost</code> (Windows), plus <code>http://localhost:5173</code> in dev builds only.</td><td>§06</td></tr>
+    <tr><td>Exact allowed origins for CORS</td><td><code>tauri://localhost</code> (macOS/Linux), <code>http://tauri.localhost</code> (Windows), plus <code>http://localhost:1420</code> in dev builds only.</td><td>§06</td></tr>
     <tr><td>CSP for the WebView</td><td><code>connect-src ipc: http://ipc.localhost http://127.0.0.1:*</code>; nothing else.</td><td>§06</td></tr>
     <tr><td>Orphan sidecar if Rust crashes</td><td>Sidecar treats stdin EOF as parent death and shuts down.</td><td>§04</td></tr>
     <tr><td>How reminders reach the OS</td><td>Sidecar emits <code>AGENDA_EVENT notify</code> on stdout, and Rust shows it with the notification plugin (option B, §06 here).</td><td>§09</td></tr>
