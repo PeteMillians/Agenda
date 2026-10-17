@@ -33,8 +33,16 @@ export function describe(error: unknown): string {
   return "Something went wrong.";
 }
 
-/** Load data, with a reload function for after mutations. */
-export function useLoad<T>(load: () => Promise<T>, deps: readonly unknown[]) {
+// Any successful mutation tells every loaded view to refresh, so two widgets showing the same
+// data never disagree. Cheap at personal scale; SSE can replace it later (spec §09).
+const listeners = new Set<() => void>();
+
+export function notifyChanged(): void {
+  listeners.forEach((listener) => listener());
+}
+
+/** Load data, with a reload function for after mutations. Reloads when anything changes. */
+export function useLoad<T>(load: () => Promise<T>, deps: readonly unknown[], { live = true } = {}) {
   const [data, setData] = useState<T>();
   const [error, setError] = useState<string>();
   const reload = useCallback(load, deps);
@@ -48,8 +56,14 @@ export function useLoad<T>(load: () => Promise<T>, deps: readonly unknown[]) {
   }, [reload]);
   useEffect(() => {
     void refresh();
-  }, [refresh]);
-  return { data, error, reload: refresh };
+    if (!live) return;
+    const listener = () => void refresh();
+    listeners.add(listener);
+    return () => {
+      listeners.delete(listener);
+    };
+  }, [refresh, live]);
+  return { data, error, reload: refresh, setData };
 }
 
 /** Run a mutation, then reload. A revision conflict reloads too, so the next try uses fresh data. */
@@ -60,6 +74,8 @@ export function useAction(reload: () => Promise<void>) {
       setError(undefined);
       try {
         await action();
+        notifyChanged();
+        return;
       } catch (e) {
         setError(
           e instanceof ApiError && e.code === "REVISION_CONFLICT"

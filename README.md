@@ -6,16 +6,16 @@ target, developed on Linux.
 - **Design:** [`docs/Agenda_Top.html`](docs/Agenda_Top.html) (spec) ·
   [`docs/Agenda_Architecture.html`](docs/Agenda_Architecture.html) (component and IPC map) ·
   [`docs/adr/`](docs/adr)
-- **Status:** Phase 1, personal core. Spaces, people, tasks and repeating chores, lists, and local
-  calendar events with recurring series, served by a local API with a durable job queue. The UI is a
-  set of plain screens; the dashboard arrives in Phase 2.
+- **Status:** Phase 2, dashboards. Each dashboard shows one or more spaces through a grid of
+  widgets (upcoming events, tasks & chores, lists, people) that you can drag, resize, configure,
+  add, and remove. The backend is a local API with a durable job queue.
 
 ## Layout
 
 | Path | What | Runs in |
 |---|---|---|
 | `apps/desktop/src-tauri` | Rust shell: window, tray, sidecar supervisor, `get_backend_config` | Tauri main process |
-| `apps/desktop/src` | React + TypeScript UI and typed API client | WebView |
+| `apps/desktop/src` | React + TypeScript UI: dashboards (`dashboard/`), widget registry (`widgets/`), typed API client (`api/`) | WebView |
 | `packages/contracts` | `openapi.json` and the TypeScript types generated from it | build time |
 | `services/backend` | FastAPI sidecar: security boundary, SQLite, migrations | sidecar process |
 | `packaging` | Freezes the backend into `agenda-backend-<triple>` with PyInstaller | build time |
@@ -37,6 +37,7 @@ uv sync --directory services/backend
 | `pnpm dev` | `tauri dev`: Vite with hot reload, and the backend run from its venv |
 | `pnpm contracts` | Regenerate `openapi.json` and the TS types after changing a route or Pydantic model |
 | `pnpm typecheck` | `tsc --noEmit` for the UI |
+| `pnpm --filter desktop test` | UI unit tests (Vitest): widget registry, keyboard layout, crash isolation |
 | `uv run --directory services/backend pytest` | Backend tests, including the real stdin/stdout protocol |
 | `uv run --directory services/backend ruff check .` | Python lint |
 | `cargo clippy` (in `apps/desktop/src-tauri`) | Rust lint |
@@ -68,10 +69,10 @@ Every push to `main`, every pull request, and manual runs ("Run workflow" on the
 `agenda-windows-installer` artifact from the `windows-installer` job. Download it, run the `.exe`, and
 accept the SmartScreen prompt ("More info → Run anyway"); the app is unsigned.
 
-**Phase 1 exit gate (spec §17):** data persists across restarts; every route rejects a missing
-secret; cross-space substitution is refused; job crash/retry tests pass. The last three are
-automated (`services/backend/tests`). For the first, add a task, a repeating chore, a recurring
-event, and a list item, quit from the tray, relaunch, and check they are all there.
+**Phase 2 exit gate (spec §17):** the owner can build Personal, Work, and Family dashboards that
+survive restarts, and a broken widget cannot take down a dashboard. Crash isolation and config
+fallback are unit-tested. To check by hand: customize a dashboard (add, move, resize, remove a
+widget), quit from the tray, relaunch, and confirm the layout is unchanged.
 
 To build the sidecar locally for your own OS:
 

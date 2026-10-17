@@ -1,39 +1,38 @@
 import type { Person } from "@agenda/contracts";
 import { useState } from "react";
+import { z } from "zod";
 import { api } from "../api/backend";
 import { call, ifMatch, useAction, useLoad } from "../api/call";
+import { defineWidget, type WidgetProps } from "../dashboard/registry";
+import { useSpaces } from "../state/spaces";
 
-export function PeopleTab({ spaceId }: { spaceId: string }) {
+const Config = z.object({});
+type Config = z.infer<typeof Config>;
+
+function PeopleWidget({ spaceIds }: WidgetProps<Config>) {
+  return (
+    <div className="widget-content">
+      <p className="muted">People can be assigned tasks and chores. They don't need an Agenda login.</p>
+      {spaceIds.map((id) => (
+        <SpacePeople key={id} spaceId={id} showName={spaceIds.length > 1} />
+      ))}
+    </div>
+  );
+}
+
+function SpacePeople({ spaceId, showName }: { spaceId: string; showName: boolean }) {
+  const space = useSpaces().byId.get(spaceId);
   const people = useLoad(
     async () =>
-      (await call((await api()).GET("/api/v1/spaces/{space_id}/people", { params: { path: { space_id: spaceId } } })))
-        .data,
+      (await call((await api()).GET("/api/v1/spaces/{space_id}/people", { params: { path: { space_id: spaceId } } }))).data,
     [spaceId],
   );
   const [name, setName] = useState("");
   const { run, error } = useAction(people.reload);
 
   return (
-    <section>
-      <p className="muted">People can be assigned tasks and chores. They don't need an Agenda login.</p>
-      <form
-        className="card"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void run(async () => {
-            await call(
-              (await api()).POST("/api/v1/spaces/{space_id}/people", {
-                params: { path: { space_id: spaceId } },
-                body: { display_name: name },
-              }),
-            );
-            setName("");
-          });
-        }}
-      >
-        <input placeholder="Add a person" value={name} onChange={(e) => setName(e.target.value)} />
-      </form>
-      {(error || people.error) && <p className="problem">{error ?? people.error}</p>}
+    <div>
+      {showName && <h4>{space?.name}</h4>}
       <ul className="rows">
         {(people.data ?? []).map((person) => (
           <PersonRow
@@ -61,7 +60,24 @@ export function PeopleTab({ spaceId }: { spaceId: string }) {
           />
         ))}
       </ul>
-    </section>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          void run(async () => {
+            await call(
+              (await api()).POST("/api/v1/spaces/{space_id}/people", {
+                params: { path: { space_id: spaceId } },
+                body: { display_name: name },
+              }),
+            );
+            setName("");
+          });
+        }}
+      >
+        <input placeholder={`Add someone${showName && space ? ` to ${space.name}` : ""}`} value={name} onChange={(e) => setName(e.target.value)} />
+      </form>
+      {(error || people.error) && <p className="problem">{error ?? people.error}</p>}
+    </div>
   );
 }
 
@@ -107,3 +123,14 @@ function PersonRow(props: { person: Person; onRename: (name: string) => void; on
     </li>
   );
 }
+
+export const people = defineWidget<Config>({
+  id: "agenda.people",
+  version: 1,
+  title: "People",
+  description: "Who chores can be assigned to",
+  configSchema: Config,
+  defaultConfig: {},
+  layout: { w: 4, h: 6, minW: 3, minH: 3 },
+  Component: PeopleWidget,
+});
