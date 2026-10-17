@@ -539,7 +539,7 @@ COMMIT;</code></pre>
     <li>Google push channels and Microsoft Graph subscriptions need a public HTTPS endpoint, which a local app does not have. Use incremental polling instead.</li>
     <li>Google: <code>events.list</code> with <code>syncToken</code>; on <code>410 Gone</code>, discard the token and run a full resync that reconciles by <code>event_mappings</code> without duplicating events.</li>
     <li>Microsoft Graph: <code>calendarView/delta</code> with the stored <code>deltaLink</code>; on an expired link, full resync the same way.</li>
-    <li>Cadence: every 5 minutes while the app is open, immediately on launch, on window focus after being idle, and right after a local write. Back off on 429/5xx. Nothing syncs while the app is closed.</li>
+    <li>Cadence: every 5 minutes while the app is open, immediately on launch, on window focus after being idle, and right after a local write. Back off on 429/5xx. Closing the window hides Agenda to the system tray, so sync and reminders keep running until the user quits from the tray; Agenda starts at login (<a href="adr/0001-personal-windows-tray.md">ADR 0001</a>).</li>
   </ul>
   <h3>Calendar-to-space mapping</h3>
   <p>When an account is connected, the user picks which provider calendars to import and which space each belongs to (for example, the shared "Family" Google calendar → Family space). Imported events take that space. Moving a source to another space moves its events.</p>
@@ -806,7 +806,7 @@ class PlanningProposal(BaseModel):
     <li>Recurring event model details: how RRULE series, exceptions, and the "this and following" split are stored (Phase 1).</li>
     <li>At-rest database encryption (SQLCipher) versus relying on OS disk encryption (Phase 1).</li>
     <li>Exact OAuth scopes per stage, and whether to pursue Google verification and CASA (Phases 3–6).</li>
-    <li>Polling cadence, and whether to keep syncing from the system tray when the window is closed (Phase 3).</li>
+    <li>Polling cadence (Phase 3). Tray behavior is decided: keep running in the tray, start at login (ADR 0001).</li>
     <li>Backup encryption and passphrase recovery behavior (Phase 6).</li>
     <li>When live UI updates justify Server-Sent Events over polling.</li>
   </ul>

@@ -1,0 +1,10 @@
+{
+  "name": "agenda",
+  "private": true,
+  "packageManager": "pnpm@12.14.0",
+  "scripts": {
+    "dev": "pnpm --filter desktop tauri dev",
+    "contracts": "uv run --directory services/backend python -m scripts.export_openapi && pnpm --filter @agenda/contracts generate",
+    "typecheck": "pnpm --filter desktop exec tsc --noEmit"
+  }
+}
