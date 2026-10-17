@@ -9,7 +9,7 @@ from tests.conftest import running
 def test_fresh_database_migrates_to_head(settings):
     settings.data_dir.mkdir(parents=True)
     migrate(settings.db_path, settings.backups_dir)
-    assert current_revision(settings.db_path) == "0001"
+    assert current_revision(settings.db_path) == "0002"
     assert not settings.backups_dir.exists()  # nothing to snapshot on first run
 
 
@@ -23,7 +23,7 @@ def test_existing_database_is_snapshotted_before_upgrade(settings):
 
     migrate(settings.db_path, settings.backups_dir)
 
-    assert current_revision(settings.db_path) == "0001"
+    assert current_revision(settings.db_path) == "0002"
     [snapshot] = settings.backups_dir.glob("pre-migration-base-*.db")
     with sqlite3.connect(snapshot) as conn:
         tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}

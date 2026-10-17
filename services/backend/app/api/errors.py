@@ -10,9 +10,17 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from app.domain.errors import AppError
+
 
 class Envelope[T](BaseModel):
     data: T
+    request_id: str
+
+
+class Paged[T](BaseModel):
+    data: list[T]
+    next_cursor: str | None
     request_id: str
 
 
@@ -27,14 +35,8 @@ class ErrorEnvelope(BaseModel):
     request_id: str
 
 
-class AppError(Exception):
-    def __init__(self, status: int, code: str, message: str, details: dict[str, Any] | None = None):
-        super().__init__(message)
-        self.status, self.code, self.message, self.details = status, code, message, details or {}
-
-
 ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
-    status: {"model": ErrorEnvelope} for status in (401, 422, 503)
+    status: {"model": ErrorEnvelope} for status in (401, 403, 404, 409, 422, 428, 503)
 }
 
 

@@ -41,3 +41,20 @@ def settings(tmp_path: Path) -> Settings:
 def client(settings: Settings) -> Iterator[TestClient]:
     with running(settings) as c:
         yield c
+
+
+def complete_setup(client: TestClient, timezone: str = "America/New_York") -> dict[str, dict]:
+    """Run first-time setup; return the default spaces keyed by name."""
+    res = client.post("/api/v1/setup", json={"display_name": "Pete", "timezone": timezone}, headers=AUTH)
+    assert res.status_code == 201, res.text
+    spaces = client.get("/api/v1/spaces", headers=AUTH).json()["data"]
+    return {space["name"]: space for space in spaces}
+
+
+@pytest.fixture
+def spaces(client: TestClient) -> dict[str, dict]:
+    return complete_setup(client)
+
+
+def rev(revision: int) -> dict[str, str]:
+    return {**AUTH, "If-Match": str(revision)}

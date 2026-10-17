@@ -9,24 +9,24 @@ def test_health_is_public(client):
 
 
 def test_missing_secret_is_rejected(client):
-    res = client.get("/api/v1/notes")
+    res = client.get("/api/v1/spaces")
     assert res.status_code == 401
     assert res.json()["error"]["code"] == "UNAUTHORIZED"
     assert res.json()["request_id"].startswith("req_")
 
 
 def test_wrong_secret_is_rejected(client):
-    res = client.get("/api/v1/notes", headers={"Authorization": "Bearer " + "b" * 64})
+    res = client.get("/api/v1/spaces", headers={"Authorization": "Bearer " + "b" * 64})
     assert res.status_code == 401
 
 
 def test_secret_in_wrong_scheme_is_rejected(client):
-    res = client.get("/api/v1/notes", headers={"Authorization": TOKEN})
+    res = client.get("/api/v1/spaces", headers={"Authorization": TOKEN})
     assert res.status_code == 401
 
 
 def test_bad_host_is_rejected_before_auth(client):
-    res = client.get("/api/v1/notes", headers={**AUTH, "Host": "evil.example"})
+    res = client.get("/api/v1/spaces", headers={**AUTH, "Host": "evil.example"})
     assert res.status_code == 400
     assert res.json()["error"]["code"] == "BAD_HOST"
 
@@ -38,7 +38,7 @@ def test_wrong_port_in_host_is_rejected(client):
 
 def test_preflight_from_tauri_origin_is_allowed(client):
     res = client.options(
-        "/api/v1/notes",
+        "/api/v1/spaces",
         headers={
             "Origin": "http://tauri.localhost",
             "Access-Control-Request-Method": "POST",
@@ -51,7 +51,7 @@ def test_preflight_from_tauri_origin_is_allowed(client):
 
 def test_preflight_from_other_origin_is_refused(client):
     res = client.options(
-        "/api/v1/notes",
+        "/api/v1/spaces",
         headers={"Origin": "https://evil.example", "Access-Control-Request-Method": "POST"},
     )
     assert res.status_code == 400
@@ -60,7 +60,7 @@ def test_preflight_from_other_origin_is_refused(client):
 
 def test_dev_origin_only_allowed_in_dev(client):
     res = client.options(
-        "/api/v1/notes",
+        "/api/v1/spaces",
         headers={"Origin": "http://localhost:1420", "Access-Control-Request-Method": "GET"},
     )
     assert res.status_code == 400

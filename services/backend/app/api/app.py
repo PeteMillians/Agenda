@@ -9,10 +9,10 @@ from sqlalchemy import text
 
 from app.api import health
 from app.api.errors import install_error_handlers
-from app.api.v1 import notes
+from app.api.v1 import router as v1_router
 from app.config import Settings
 from app.core.security import install_boundary
-from app.db import SchemaTooNew, make_engine, migrate
+from app.db import SchemaTooNew, checkpoint, make_engine, migrate
 
 log = logging.getLogger(__name__)
 
@@ -44,9 +44,9 @@ async def lifespan(app: FastAPI):
     yield
     await task
     if app.state.engine is not None:
-        async with app.state.engine.begin() as conn:
-            await conn.execute(text("PRAGMA wal_checkpoint(TRUNCATE)"))
         await app.state.engine.dispose()
+        # outside any transaction: SQLite refuses a checkpoint inside one
+        await asyncio.to_thread(checkpoint, app.state.settings.db_path)
     log.info("backend stopped")
 
 
@@ -62,5 +62,5 @@ def create_app(settings: Settings) -> FastAPI:
     install_error_handlers(app)
     install_boundary(app, settings)
     app.include_router(health.router)
-    app.include_router(notes.router, prefix="/api/v1")
+    app.include_router(v1_router)
     return app

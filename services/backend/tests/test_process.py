@@ -56,8 +56,10 @@ def backend(tmp_path):
 def test_announces_port_and_serves(backend):
     _, port, _ = backend
     wait_ready(port)
-    res = httpx.get(f"http://127.0.0.1:{port}/api/v1/notes", headers={"Authorization": f"Bearer {TOKEN}"})
-    assert res.status_code == 200
+    res = httpx.get(
+        f"http://127.0.0.1:{port}/api/v1/setup/status", headers={"Authorization": f"Bearer {TOKEN}"}
+    )
+    assert res.json()["data"] == {"completed": False}
 
 
 def test_shutdown_line_stops_gracefully(backend):
