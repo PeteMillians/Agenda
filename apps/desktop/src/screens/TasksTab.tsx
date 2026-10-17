@@ -2,7 +2,7 @@ import type { Person, Repeat, Task } from "@agenda/contracts";
 import { useState } from "react";
 import { api } from "../api/backend";
 import { call, ifMatch, useAction, useLoad } from "../api/call";
-import { formatDay, formatTime, localDateOf, today, weekdayCode } from "../dates";
+import { describeRule, formatDay, formatTime, localDateOf, today, weekdayCode } from "../dates";
 
 type RepeatChoice = "none" | "weekly" | "monthly" | "after" | "custom";
 
@@ -23,7 +23,7 @@ function buildRepeat(choice: RepeatChoice, due: string, days: number, custom: st
 
 function describeRepeat(repeat: Repeat): string | null {
   if (repeat.mode === "after_completion") return `every ${repeat.interval_days} days after done`;
-  if (repeat.mode === "schedule") return repeat.rrule ?? null;
+  if (repeat.mode === "schedule" && repeat.rrule) return describeRule(repeat.rrule);
   return null;
 }
 
@@ -178,6 +178,7 @@ function NewTask(props: { spaceId: string; people: Person[]; onCreated: () => Pr
             }),
           );
           setTitle("");
+          setRepeat("none"); // a leftover repeat would silently make the next task a chore
         });
       }}
     >

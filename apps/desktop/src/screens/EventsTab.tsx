@@ -2,7 +2,7 @@ import type { Occurrence } from "@agenda/contracts";
 import { useState } from "react";
 import { api } from "../api/backend";
 import { call, ifMatch, useAction, useLoad } from "../api/call";
-import { addDays, formatDay, formatTime, localDateOf, localToIso, today, weekdayCode } from "../dates";
+import { addDays, describeRule, formatDay, formatTime, localDateOf, localToIso, today, weekdayCode } from "../dates";
 
 const RANGE_DAYS = 28;
 type Scope = "this" | "following" | "all";
@@ -102,7 +102,7 @@ function EventRow(props: {
         )}
         <div className="meta">
           {o.location && <span>{o.location}</span>}
-          {o.is_recurring && <span title={o.rrule ?? ""}>↻ repeats</span>}
+          {o.rrule && <span title={o.rrule}>↻ {describeRule(o.rrule)}</span>}
           {o.is_exception && <span>edited occurrence</span>}
         </div>
       </div>
@@ -166,6 +166,7 @@ function NewEvent(props: { spaceId: string; onCreated: () => Promise<void> }) {
           );
           setTitle("");
           setLocation("");
+          setFrequency(""); // a leftover "weekly" would silently make the next event a series
         });
       }}
     >
