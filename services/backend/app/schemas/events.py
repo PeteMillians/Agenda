@@ -69,6 +69,7 @@ class Event(BaseModel):
     rrule: str | None
     series_id: UUID | None
     original_start: str | None
+    calendar_source_id: UUID | None = None  # set for events imported from a provider calendar
     status: Literal["confirmed", "cancelled"]
     revision: int
     created_at: datetime
@@ -94,3 +95,5 @@ class Occurrence(BaseModel):
     end_date: date | None
     timezone: str
     rrule: str | None
+    calendar_source_id: UUID | None = None
+    read_only: bool = False  # imported events can't be edited until two-way sync (Phase 4)

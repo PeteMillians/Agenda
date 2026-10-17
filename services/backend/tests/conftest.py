@@ -7,6 +7,7 @@ import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
@@ -33,11 +34,11 @@ def _migrated_template() -> Path:
 
 
 @contextmanager
-def running(settings: Settings, *, wait_ready: bool = True) -> Iterator[TestClient]:
+def running(settings: Settings, *, wait_ready: bool = True, **app_options: Any) -> Iterator[TestClient]:
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     if not settings.db_path.exists():
         shutil.copy(_migrated_template(), settings.db_path)
-    with TestClient(create_app(settings), base_url=f"http://127.0.0.1:{PORT}") as client:
+    with TestClient(create_app(settings, **app_options), base_url=f"http://127.0.0.1:{PORT}") as client:
         if wait_ready:
             deadline = time.monotonic() + 10
             while client.get("/health/ready").status_code != 200:

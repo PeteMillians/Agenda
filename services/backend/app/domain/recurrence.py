@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import UTC, date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
-from dateutil.rrule import rrule, rrulestr
+from dateutil.rrule import rrule, rruleset, rrulestr
 
 ALLOWED_FREQ = ("DAILY", "WEEKLY", "MONTHLY", "YEARLY")
 MAX_OCCURRENCES = 1000
@@ -72,6 +72,15 @@ def _rule(rule: str, dtstart: datetime) -> rrule:
     return parsed
 
 
+def _occurrences(rule: str, dtstart: datetime) -> rruleset:
+    """The series' occurrences. RFC 5545: DTSTART is always the first occurrence, even when it
+    is off the rule's pattern (possible in imported calendars); dateutil would drop it."""
+    series = rruleset()
+    series.rrule(_rule(rule, dtstart))
+    series.rdate(dtstart)
+    return series
+
+
 def _midnight(day: date) -> datetime:
     return datetime.combine(day, time())
 
@@ -96,7 +105,7 @@ def expand_timed(
     window_end: datetime,
 ) -> list[datetime]:
     """UTC starts of the occurrences that overlap [window_start, window_end)."""
-    generator = _rule(rule, to_local(start, tz))
+    generator = _occurrences(rule, to_local(start, tz))
     # pad by a day on each side: local/UTC offsets shift the window edges
     lo = to_local(window_start - duration, tz) - timedelta(days=1)
     hi = to_local(window_end, tz) + timedelta(days=1)
@@ -112,7 +121,7 @@ def expand_timed(
 
 def expand_dates(rule: str, start: date, days: int, window_start: date, window_end: date) -> list[date]:
     """Start dates of the all-day occurrences that overlap [window_start, window_end)."""
-    generator = _rule(rule, _midnight(start))
+    generator = _occurrences(rule, _midnight(start))
     lo = _midnight(window_start - timedelta(days=days))
     found = []
     for moment in generator.between(lo, _midnight(window_end), inc=True):
@@ -126,12 +135,22 @@ def expand_dates(rule: str, start: date, days: int, window_start: date, window_e
 
 def is_timed_occurrence(rule: str, start: datetime, tz: ZoneInfo, candidate: datetime) -> bool:
     local = to_local(candidate, tz)
-    return bool(_rule(rule, to_local(start, tz)).between(local, local, inc=True))
+    return bool(_occurrences(rule, to_local(start, tz)).between(local, local, inc=True))
 
 
 def is_date_occurrence(rule: str, start: date, candidate: date) -> bool:
     moment = _midnight(candidate)
-    return bool(_rule(rule, _midnight(start)).between(moment, moment, inc=True))
+    return bool(_occurrences(rule, _midnight(start)).between(moment, moment, inc=True))
+
+
+def start_on_pattern(rule: str, start: date | datetime, tz: ZoneInfo | None = None) -> bool:
+    """Whether the rule itself generates `start` (Agenda requires this for its own events)."""
+    if isinstance(start, datetime):
+        assert tz is not None
+        local = to_local(start, tz)
+        return bool(_rule(rule, local).between(local, local, inc=True))
+    moment = _midnight(start)
+    return bool(_rule(rule, moment).between(moment, moment, inc=True))
 
 
 # --------------------------------------------------------------------------- splitting

@@ -67,3 +67,13 @@ export function watchBackend(onStatus: (status: BackendStatus) => void): () => v
   );
   return () => subscriptions.forEach((subscription) => subscription.then((unlisten) => unlisten()));
 }
+
+/** Open a URL in the user's default browser (OAuth sign-in must not happen inside the app). */
+export async function openExternal(url: string): Promise<void> {
+  if (browserDev) {
+    window.open(url, "_blank", "noopener");
+    return;
+  }
+  const { openUrl } = await import("@tauri-apps/plugin-opener");
+  await openUrl(url);
+}

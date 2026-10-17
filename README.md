@@ -6,9 +6,9 @@ target, developed on Linux.
 - **Design:** [`docs/Agenda_Top.html`](docs/Agenda_Top.html) (spec) ·
   [`docs/Agenda_Architecture.html`](docs/Agenda_Architecture.html) (component and IPC map) ·
   [`docs/adr/`](docs/adr)
-- **Status:** Phase 2, dashboards. Each dashboard shows one or more spaces through a grid of
-  widgets (upcoming events, tasks & chores, lists, people) that you can drag, resize, configure,
-  add, and remove. The backend is a local API with a durable job queue.
+- **Status:** Phase 3, Google Calendar import. Dashboards of widgets over your spaces, plus
+  read-only import of Google calendars into the space you choose (polled every few minutes while
+  Agenda runs). See [ADR 0004](docs/adr/0004-google-calendar-import.md).
 
 ## Layout
 
@@ -69,10 +69,22 @@ Every push to `main`, every pull request, and manual runs ("Run workflow" on the
 `agenda-windows-installer` artifact from the `windows-installer` job. Download it, run the `.exe`, and
 accept the SmartScreen prompt ("More info → Run anyway"); the app is unsigned.
 
-**Phase 2 exit gate (spec §17):** the owner can build Personal, Work, and Family dashboards that
-survive restarts, and a broken widget cannot take down a dashboard. Crash isolation and config
-fallback are unit-tested. To check by hand: customize a dashboard (add, move, resize, remove a
-widget), quit from the tray, relaunch, and confirm the layout is unchanged.
+### Connecting Google Calendar
+
+One-time setup in [Google Cloud Console](https://console.cloud.google.com/):
+
+1. Create a project and enable the **Google Calendar API**.
+2. **OAuth consent screen**: choose External, keep it in **Testing**, and add your Google address
+   as a test user. Testing mode means signing in again every 7 days; Agenda says when.
+3. **Credentials** → Create credentials → OAuth client ID → **Desktop app**.
+4. In Agenda, open **Calendars** in the sidebar, paste the client ID and secret, and choose
+   **Connect Google Calendar**. Your browser opens for sign-in.
+5. Pick a space for each calendar you want to import.
+
+**Phase 3 exit gate (spec §17):** import stays correct through DST, recurrence exceptions,
+deletions, and forced resyncs, with no duplicates. Automated in `tests/test_google.py` against a
+fake Google. By hand: connect your account, map a calendar, edit and delete a few events (including
+one occurrence of a repeating event) in Google, choose **Sync now**, and compare.
 
 To build the sidecar locally for your own OS:
 
