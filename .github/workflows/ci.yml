@@ -37,6 +37,7 @@ jobs:
           pnpm contracts
           git diff --exit-code packages/contracts
       - run: pnpm typecheck
+      - run: pnpm --filter desktop test
       - run: pnpm --filter desktop build
 
   shell:

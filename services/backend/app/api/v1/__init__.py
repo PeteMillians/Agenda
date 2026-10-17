@@ -2,8 +2,8 @@
 
 from fastapi import APIRouter
 
-from app.api.v1 import core, events, jobs, lists, tasks
+from app.api.v1 import core, dashboards, events, jobs, lists, tasks
 
 router = APIRouter(prefix="/api/v1")
-for module in (core, tasks, lists, events, jobs):
+for module in (core, dashboards, tasks, lists, events, jobs):
     router.include_router(module.router)
