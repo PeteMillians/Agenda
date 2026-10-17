@@ -182,6 +182,19 @@ events = Table(
     ),
 )
 
+dashboard_profiles = Table(
+    "dashboard_profiles",
+    metadata,
+    _id(),
+    Column("user_id", String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True),
+    Column("name", Text, nullable=False),
+    Column("position", Float, nullable=False),
+    Column("space_ids", Text, nullable=False, server_default="[]"),  # JSON list; a view, not ownership
+    Column("layout_json", Text, nullable=False, server_default="[]"),  # JSON list of widget placements
+    _revision(),
+    *_stamps(),
+)
+
 jobs = Table(
     "jobs",
     metadata,
