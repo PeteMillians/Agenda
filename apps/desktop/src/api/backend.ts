@@ -16,10 +16,17 @@ export type BackendStatus =
 
 let client: Client<paths> | null = null;
 
+/** Plain-browser development (UI tests against a hand-started backend): there is no Tauri, so
+ * the address and secret come from VITE_AGENDA_* env vars. Compiled out of production builds. */
+const browserDev: BackendConfig | null =
+  import.meta.env.DEV && !("__TAURI_INTERNALS__" in window) && import.meta.env.VITE_AGENDA_BASE_URL
+    ? { base_url: import.meta.env.VITE_AGENDA_BASE_URL, token: import.meta.env.VITE_AGENDA_TOKEN ?? "" }
+    : null;
+
 /** Typed API client. Rebuilt after every backend restart: the port and secret both change. */
 export async function api(): Promise<Client<paths>> {
   if (client) return client;
-  const config = await invoke<BackendConfig>("get_backend_config");
+  const config = browserDev ?? (await invoke<BackendConfig>("get_backend_config"));
   const fresh = createClient<paths>({ baseUrl: config.base_url });
   fresh.use({
     onRequest({ request }) {
@@ -33,6 +40,10 @@ export async function api(): Promise<Client<paths>> {
 
 /** Report backend lifecycle changes. Returns an unsubscribe function. */
 export function watchBackend(onStatus: (status: BackendStatus) => void): () => void {
+  if (browserDev) {
+    onStatus({ state: "ready" });
+    return () => {};
+  }
   const subscriptions = [
     listen("backend:ready", () => {
       client = null;

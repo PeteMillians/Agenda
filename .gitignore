@@ -28,3 +28,4 @@ target/
 
 # Sidecar executables built by packaging/build_sidecar.py
 apps/desktop/src-tauri/binaries/
+.data/

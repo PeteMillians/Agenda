@@ -1,91 +1,103 @@
-import type { ErrorEnvelope, Note } from "@agenda/contracts";
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import type { Space } from "@agenda/contracts";
+import { useEffect, useState } from "react";
 import { api, type BackendStatus, watchBackend } from "./api/backend";
+import { call, useAction, useLoad } from "./api/call";
+import { Setup } from "./screens/Setup";
+import { SpaceView } from "./screens/SpaceView";
 import "./App.css";
 
 const STATUS_TEXT: Record<BackendStatus["state"], string> = {
-  starting: "Starting backend…",
+  starting: "Starting…",
   ready: "Connected",
   restarting: "Backend restarting…",
-  failed: "Backend failed to start",
+  failed: "Backend failed to start. Quit Agenda from the tray and open it again.",
 };
-
-function describe(error: ErrorEnvelope | undefined): string {
-  return error ? `${error.error.code}: ${error.error.message}` : "Unexpected response from backend.";
-}
 
 export default function App() {
   const [status, setStatus] = useState<BackendStatus>({ state: "starting" });
-  const [notes, setNotes] = useState<Note[]>([]);
-  const [draft, setDraft] = useState("");
-  const [problem, setProblem] = useState<string | null>(null);
-
   useEffect(() => watchBackend(setStatus), []);
 
-  const refresh = useCallback(async () => {
-    try {
-      const { data, error } = await (await api()).GET("/api/v1/notes");
-      if (data) setNotes(data.data);
-      else setProblem(describe(error));
-    } catch {
-      setProblem("Backend unavailable.");
-    }
-  }, []);
+  if (status.state !== "ready") {
+    return (
+      <main className="splash">
+        <h1>Agenda</h1>
+        <p className={`status status-${status.state}`} role="status">
+          {STATUS_TEXT[status.state]}
+          {status.state === "restarting" && ` (attempt ${status.attempt})`}
+        </p>
+      </main>
+    );
+  }
+  return <Ready />;
+}
 
-  useEffect(() => {
-    if (status.state === "ready") void refresh();
-  }, [status, refresh]);
+function Ready() {
+  const setup = useLoad(async () => (await call((await api()).GET("/api/v1/setup/status"))).data.completed, []);
+  if (setup.error) return <p className="problem page">{setup.error}</p>;
+  if (setup.data === undefined) return null;
+  if (!setup.data) return <Setup onDone={setup.reload} />;
+  return <Home />;
+}
 
-  async function addNote(event: FormEvent) {
-    event.preventDefault();
-    setProblem(null);
+function readSelected(): string | null {
+  try {
+    return localStorage.getItem("agenda.space");
+  } catch {
+    return null;
+  }
+}
+
+function Home() {
+  const spaces = useLoad(async () => (await call((await api()).GET("/api/v1/spaces"))).data, []);
+  const [selected, setSelected] = useState<string | null>(readSelected);
+  const [newName, setNewName] = useState("");
+  const { run, error } = useAction(spaces.reload);
+
+  const list = spaces.data ?? [];
+  const current: Space | undefined = list.find((s) => s.id === selected) ?? list[0];
+
+  function choose(id: string) {
+    setSelected(id);
     try {
-      const { data, error } = await (await api()).POST("/api/v1/notes", { body: { body: draft } });
-      if (!data) return setProblem(describe(error));
-      setNotes((current) => [data.data, ...current]);
-      setDraft("");
+      localStorage.setItem("agenda.space", id);
     } catch {
-      setProblem("Backend unavailable.");
+      // per-viewer convenience only
     }
   }
 
-  const ready = status.state === "ready";
   return (
-    <main className="shell">
-      <header>
+    <div className="home">
+      <nav className="sidebar" aria-label="Spaces">
         <h1>Agenda</h1>
-        <span className={`status status-${status.state}`} role="status">
-          {STATUS_TEXT[status.state]}
-          {status.state === "restarting" && ` (attempt ${status.attempt})`}
-        </span>
-      </header>
-
-      <form onSubmit={addNote}>
-        <input
-          aria-label="New note"
-          placeholder="Write a note, quit from the tray, relaunch: it should still be here"
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          disabled={!ready}
-        />
-        <button type="submit" disabled={!ready || draft.trim() === ""}>
-          Add
-        </button>
-      </form>
-
-      {problem && <p className="problem">{problem}</p>}
-
-      <ul className="notes">
-        {notes.map((note) => (
-          <li key={note.id}>
-            <span>{note.body}</span>
-            <time dateTime={note.created_at}>{new Date(note.created_at).toLocaleString()}</time>
-          </li>
-        ))}
-      </ul>
-      {ready && notes.length === 0 && <p className="empty">No notes yet.</p>}
-
-      <footer>Phase 0 vertical slice · closing the window hides Agenda to the tray</footer>
-    </main>
+        <ul>
+          {list.map((space) => (
+            <li key={space.id}>
+              <button
+                className={space.id === current?.id ? "space active" : "space"}
+                onClick={() => choose(space.id)}
+              >
+                <span className="dot" style={{ background: space.color }} />
+                {space.name}
+              </button>
+            </li>
+          ))}
+        </ul>
+        <form
+          className="stack"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void run(async () => {
+              await call((await api()).POST("/api/v1/spaces", { body: { name: newName } }));
+              setNewName("");
+            });
+          }}
+        >
+          <input placeholder="New space" value={newName} onChange={(e) => setNewName(e.target.value)} />
+          {newName.trim() && <button type="submit">Add space</button>}
+        </form>
+        {(error || spaces.error) && <p className="problem">{error ?? spaces.error}</p>}
+      </nav>
+      <main className="content">{current && <SpaceView key={current.id} space={current} />}</main>
+    </div>
   );
 }
