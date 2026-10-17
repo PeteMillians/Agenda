@@ -17,6 +17,7 @@ from app.domain.errors import Conflict, Invalid, NotFound, Unavailable
 from app.domain.policy import Action
 from app.integrations.google.client import GoogleClient, Grant, ProviderError
 from app.integrations.runtime import GOOGLE_CLIENT_SETTING, Integrations, MissingClient
+from app.integrations.vault import VaultUnavailable
 from app.schemas.integrations import CalendarSourcePatch, OAuthClientIn
 
 GOOGLE_CALLBACK_PATH = "/api/v1/integrations/google/callback"
@@ -25,22 +26,26 @@ GOOGLE_CALLBACK_PATH = "/api/v1/integrations/google/callback"
 # --------------------------------------------------------------------------- OAuth client config
 
 
-async def client_status(ctx: Ctx) -> dict[str, Any]:
+async def client_status(ctx: Ctx, integrations: Integrations) -> dict[str, Any]:
     async with ctx.read() as conn:
         raw = await conn.scalar(
             select(app_settings.c.value).where(app_settings.c.key == GOOGLE_CLIENT_SETTING)
         )
-    return {"configured": raw is not None, "client_id": json.loads(raw)["client_id"] if raw else None}
+    return {
+        "configured": raw is not None,
+        "client_id": json.loads(raw)["client_id"] if raw else None,
+        "vault": integrations.vault.description if integrations.vault else None,
+    }
 
 
-async def set_client(ctx: Ctx, data: OAuthClientIn) -> dict[str, Any]:
+async def set_client(ctx: Ctx, integrations: Integrations, data: OAuthClientIn) -> dict[str, Any]:
     value = json.dumps({"client_id": data.client_id, "client_secret": data.client_secret})
     async with ctx.write() as conn:
         await conn.execute(delete(app_settings).where(app_settings.c.key == GOOGLE_CLIENT_SETTING))
         await conn.execute(
             insert(app_settings).values(key=GOOGLE_CLIENT_SETTING, value=value, updated_at=now_iso())
         )
-    return {"configured": True, "client_id": data.client_id}
+    return await client_status(ctx, integrations)
 
 
 # --------------------------------------------------------------------------- sign-in
@@ -129,7 +134,12 @@ async def complete_google(integrations: Integrations, state: str, code: str) -> 
                     updated_at=stamp,
                 )
             )
-        integrations.vault.set(f"google:{account_id}", grant.refresh_token)
+        try:
+            integrations.vault.set(f"google:{account_id}", grant.refresh_token)
+        except VaultUnavailable as exc:  # rolls the account row back with the transaction
+            raise Unavailable(
+                "The credential vault refused to store the token.", code="VAULT_UNAVAILABLE"
+            ) from exc
         integrations.remember(account_id, grant)
     await refresh_calendars_for(integrations, account_id, grant)
     await integrations.enqueue_due(force=True)  # reconnecting resumes enabled calendars right away

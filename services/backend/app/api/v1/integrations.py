@@ -36,13 +36,13 @@ IntegrationsDep = Annotated[Integrations, Depends(integrations)]
 
 
 @router.get("/integrations/google/client", response_model=Envelope[OAuthClientStatus])
-async def google_client(ctx: CtxDep):
-    return {"data": await service.client_status(ctx), "request_id": ctx.request_id}
+async def google_client(ctx: CtxDep, deps: IntegrationsDep):
+    return {"data": await service.client_status(ctx, deps), "request_id": ctx.request_id}
 
 
 @router.put("/integrations/google/client", response_model=Envelope[OAuthClientStatus])
-async def set_google_client(ctx: CtxDep, body: OAuthClientIn):
-    return {"data": await service.set_client(ctx, body), "request_id": ctx.request_id}
+async def set_google_client(ctx: CtxDep, deps: IntegrationsDep, body: OAuthClientIn):
+    return {"data": await service.set_client(ctx, deps, body), "request_id": ctx.request_id}
 
 
 @router.post("/integrations/google/connect/start", response_model=Envelope[ConnectStart])

@@ -1,8 +1,9 @@
 import type { Dashboard } from "@agenda/contracts";
 import { useEffect, useRef, useState } from "react";
 import { api, type BackendStatus, watchBackend } from "./api/backend";
-import { call, describe, useLoad } from "./api/call";
+import { call, describe, notifyChanged, useLoad } from "./api/call";
 import { DashboardView } from "./dashboard/DashboardView";
+import { CalendarsPanel } from "./screens/CalendarsPanel";
 import { Setup } from "./screens/Setup";
 import { SpacesPanel } from "./screens/SpacesPanel";
 import { SpacesProvider, useSpaces } from "./state/spaces";
@@ -69,7 +70,8 @@ function Home() {
     live: false,
   });
   const [selected, setSelected] = useState<string | null>(remembered);
-  const [view, setView] = useState<"dashboard" | "spaces">("dashboard");
+  const [view, setView] = useState<"dashboard" | "spaces" | "calendars">("dashboard");
+  useCalendarFreshness();
   const [newName, setNewName] = useState("");
   const [problem, setProblem] = useState<string>();
   const [generation, setGeneration] = useState(0); // bumped to remount a dashboard with server state
@@ -146,6 +148,9 @@ function Home() {
           <input placeholder="New dashboard" value={newName} onChange={(e) => setNewName(e.target.value)} />
         </form>
         <div className="sidebar-foot">
+          <button className={view === "calendars" ? "space active" : "space"} onClick={() => setView("calendars")}>
+            Calendars
+          </button>
           <button className={view === "spaces" ? "space active" : "space"} onClick={() => setView("spaces")}>
             Spaces
           </button>
@@ -155,6 +160,8 @@ function Home() {
       <main className="content">
         {view === "spaces" ? (
           <SpacesPanel />
+        ) : view === "calendars" ? (
+          <CalendarsPanel />
         ) : (
           current && (
             <DashboardView
@@ -175,4 +182,47 @@ function Home() {
       </main>
     </div>
   );
+}
+
+const FOCUS_SYNC_AFTER_MS = 5 * 60 * 1000;
+const FRESHNESS_CHECK_MS = 60 * 1000;
+
+/** Imported calendars change without anyone clicking here: poll when the window comes back after
+ * a while (spec §10), and refresh widgets whenever a background sync has landed something. */
+function useCalendarFreshness() {
+  useEffect(() => {
+    let lastPoll = Date.now();
+    let lastSeen = "";
+    const syncedAt = async () => {
+      const sources = (await call((await api()).GET("/api/v1/calendar-sources"))).data;
+      return sources.map((s) => `${s.id}:${s.last_synced_at}`).join();
+    };
+    const check = async () => {
+      try {
+        const now = await syncedAt();
+        if (lastSeen && now !== lastSeen) notifyChanged();
+        lastSeen = now;
+      } catch {
+        // backend restarting; try again next tick
+      }
+    };
+    const onFocus = async () => {
+      if (document.visibilityState !== "visible" || Date.now() - lastPoll < FOCUS_SYNC_AFTER_MS) return;
+      lastPoll = Date.now();
+      try {
+        await call((await api()).POST("/api/v1/sync/run"));
+      } catch {
+        // not fatal: the scheduler polls anyway
+      }
+    };
+    void check();
+    const timer = setInterval(check, FRESHNESS_CHECK_MS);
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+    };
+  }, []);
 }

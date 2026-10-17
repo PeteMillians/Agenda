@@ -18,6 +18,7 @@ from app.config import Settings
 
 TAURI_ORIGINS = ["tauri://localhost", "http://tauri.localhost"]  # macOS/Linux, Windows
 DEV_ORIGINS = ["http://localhost:1420"]  # Vite under `tauri dev`
+ALLOWED_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"]  # every method a route uses (tested)
 
 # The OAuth callback is opened by the system browser, which has no launch secret; it is
 # protected by a one-time state instead (spec §07).
@@ -50,7 +51,7 @@ def install_boundary(app: FastAPI, settings: Settings) -> None:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=TAURI_ORIGINS + (DEV_ORIGINS if settings.dev else []),
-        allow_methods=["GET", "POST", "PATCH", "DELETE"],
+        allow_methods=ALLOWED_METHODS,
         allow_headers=["Authorization", "Content-Type", "Idempotency-Key", "If-Match"],
         expose_headers=["X-Request-ID"],
     )

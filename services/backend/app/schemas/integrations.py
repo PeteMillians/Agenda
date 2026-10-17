@@ -10,6 +10,9 @@ from pydantic import BaseModel, Field, StringConstraints
 class OAuthClientStatus(BaseModel):
     configured: bool
     client_id: str | None
+    vault: str | None = Field(
+        description="Where refresh tokens are kept; null means accounts can't be connected"
+    )
 
 
 class OAuthClientIn(BaseModel):
