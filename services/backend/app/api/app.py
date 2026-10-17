@@ -9,10 +9,11 @@ from sqlalchemy import text
 
 from app.api import health
 from app.api.errors import install_error_handlers
-from app.api.v1 import notes
+from app.api.v1 import router as v1_router
 from app.config import Settings
 from app.core.security import install_boundary
-from app.db import SchemaTooNew, make_engine, migrate
+from app.db import SchemaTooNew, checkpoint, make_engine, migrate
+from app.jobs.worker import Worker
 
 log = logging.getLogger(__name__)
 
@@ -26,6 +27,8 @@ async def prepare_database(app: FastAPI) -> None:
         async with engine.connect() as conn:  # opens the file and applies PRAGMAs (WAL is persistent)
             await conn.execute(text("SELECT 1"))
         app.state.engine = engine
+        app.state.worker = Worker(engine)
+        app.state.worker.start()  # resumes queued work and reclaims leases left by a crash
         app.state.startup_error = None
         log.info("database ready")
     except SchemaTooNew as exc:
@@ -39,14 +42,17 @@ async def prepare_database(app: FastAPI) -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.engine = None
+    app.state.worker = None
     app.state.startup_error = None
     task = asyncio.create_task(prepare_database(app))
     yield
     await task
+    if app.state.worker is not None:
+        await app.state.worker.stop()
     if app.state.engine is not None:
-        async with app.state.engine.begin() as conn:
-            await conn.execute(text("PRAGMA wal_checkpoint(TRUNCATE)"))
         await app.state.engine.dispose()
+        # outside any transaction: SQLite refuses a checkpoint inside one
+        await asyncio.to_thread(checkpoint, app.state.settings.db_path)
     log.info("backend stopped")
 
 
@@ -62,5 +68,5 @@ def create_app(settings: Settings) -> FastAPI:
     install_error_handlers(app)
     install_boundary(app, settings)
     app.include_router(health.router)
-    app.include_router(notes.router, prefix="/api/v1")
+    app.include_router(v1_router)
     return app

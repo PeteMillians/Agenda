@@ -1,7 +1,7 @@
 from alembic import context
 from sqlalchemy import create_engine
 
-from app.db import metadata
+from app.db.tables import metadata
 
 config = context.config
 

@@ -1,4 +1,4 @@
-"""SQLite engine, table definitions, and startup migration."""
+"""SQLite engine and startup migration. Tables live in app.db.tables."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from alembic.config import Config
 from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
 from alembic.util.exc import CommandError
-from sqlalchemy import Column, MetaData, String, Table, Text, create_engine, event
+from sqlalchemy import create_engine, event
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 log = logging.getLogger(__name__)
@@ -23,17 +23,6 @@ PRAGMAS = (
     "PRAGMA foreign_keys = ON",
     "PRAGMA busy_timeout = 5000",
     "PRAGMA synchronous = NORMAL",
-)
-
-metadata = MetaData()
-
-# Phase 0 only: proves write -> restart -> read. Replaced by the real domain in Phase 1.
-notes = Table(
-    "notes",
-    metadata,
-    Column("id", String(36), primary_key=True),
-    Column("body", Text, nullable=False),
-    Column("created_at", String, nullable=False),  # ISO 8601 UTC
 )
 
 
@@ -92,14 +81,29 @@ def migrate(db_path: Path, backups_dir: Path) -> None:
     command.upgrade(cfg, "head")
 
 
+def checkpoint(db_path: Path) -> None:
+    """Fold the WAL back into the main file so a clean shutdown leaves one self-contained file."""
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+
+
 def make_engine(db_path: Path) -> AsyncEngine:
     engine = create_async_engine(f"sqlite+aiosqlite:///{db_path.as_posix()}")
 
     @event.listens_for(engine.sync_engine, "connect")
     def _apply_pragmas(dbapi_conn, _record):
+        # Take over transaction control from the sqlite3 driver so BEGIN IMMEDIATE is ours to emit.
+        dbapi_conn.isolation_level = None
         cursor = dbapi_conn.cursor()
         for pragma in PRAGMAS:
             cursor.execute(pragma)
         cursor.close()
+
+    @event.listens_for(engine.sync_engine, "begin")
+    def _begin_immediate(conn):
+        # Take the write lock up front: a deferred transaction that reads and then writes can
+        # fail with SQLITE_BUSY immediately, ignoring busy_timeout. One process, short
+        # transactions (spec §09), so serializing them costs nothing.
+        conn.exec_driver_sql("BEGIN IMMEDIATE")
 
     return engine

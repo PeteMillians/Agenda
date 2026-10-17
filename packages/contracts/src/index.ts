@@ -5,5 +5,16 @@ import type { components } from "./schema";
 export type { components, paths } from "./schema";
 
 type Schemas = components["schemas"];
-export type Note = Schemas["Note"];
 export type ErrorEnvelope = Schemas["ErrorEnvelope"];
+export type User = Schemas["User"];
+export type Space = Schemas["Space"];
+export type Person = Schemas["Person"];
+export type Task = Schemas["Task"];
+export type TaskCreate = Schemas["TaskCreate"];
+export type Repeat = Schemas["Repeat"];
+export type ListSummary = Schemas["ListSummary"];
+export type ListDetail = Schemas["ListDetail"];
+export type ListItem = Schemas["ListItem"];
+export type Occurrence = Schemas["Occurrence"];
+export type EventCreate = Schemas["EventCreate"];
+export type EventPatch = Schemas["EventPatch"];

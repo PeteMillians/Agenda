@@ -10,6 +10,7 @@ PyInstaller cannot cross-compile, so this builds for the OS it runs on.
 
 from __future__ import annotations
 
+import json
 import os
 import secrets
 import shutil
@@ -53,9 +54,41 @@ def build(name: str, work: Path) -> Path:
             "--collect-submodules=alembic",
             "--collect-submodules=sqlalchemy.dialects.sqlite",
             "--hidden-import=aiosqlite",
+            # zoneinfo has no system database on Windows; it reads the tzdata package's files
+            "--collect-data=tzdata",
         ]
     )
     return work / "dist" / f"{name}{EXE}"
+
+
+def exercise_api(port: int, token: str) -> None:
+    """Paths that need bundled data: migrations ran (ready), time zones (setup), recurrence (event)."""
+    base = f"http://127.0.0.1:{port}/api/v1"
+    headers = {"Authorization": f"Bearer {token}", "Host": f"127.0.0.1:{port}", "Content-Type": "application/json"}
+
+    def send(method: str, path: str, body: dict | None = None) -> dict:
+        data = json.dumps(body).encode() if body is not None else None
+        request = urllib.request.Request(base + path, data=data, headers=headers, method=method)
+        with urllib.request.urlopen(request) as res:
+            return json.loads(res.read())
+
+    send("POST", "/setup", {"display_name": "Smoke", "timezone": "America/New_York"})
+    space = send("GET", "/spaces")["data"][0]["id"]
+    send(
+        "POST",
+        f"/spaces/{space}/events",
+        {
+            "title": "DST check",
+            "start_at": "2026-10-20T13:00:00Z",
+            "end_at": "2026-10-20T14:00:00Z",
+            "rrule": "FREQ=WEEKLY;BYDAY=TU",
+        },
+    )
+    hours = {
+        o["start_at"][11:13] for o in send("GET", f"/spaces/{space}/events?from=2026-10-19&to=2026-11-16")["data"]
+    }
+    if hours != {"13", "14"}:  # 09:00 New York on both sides of the DST change
+        sys.exit(f"smoke test: time zone expansion is wrong: {sorted(hours)}")
 
 
 def smoke_test(binary: Path) -> None:
@@ -69,7 +102,8 @@ def smoke_test(binary: Path) -> None:
             text=True,
         )
         assert proc.stdin and proc.stdout
-        proc.stdin.write(secrets.token_hex(32) + "\n")
+        token = secrets.token_hex(32)
+        proc.stdin.write(token + "\n")
         proc.stdin.flush()
         line = proc.stdout.readline().strip()
         if not line.startswith("AGENDA_READY port="):
@@ -90,13 +124,14 @@ def smoke_test(binary: Path) -> None:
                 sys.exit("smoke test: /health/ready never returned 200")
             time.sleep(0.2)
         cold_start = time.monotonic() - started
+        exercise_api(port, token)
 
         proc.stdin.write("shutdown\n")
         proc.stdin.flush()
         code = proc.wait(timeout=20)
         if code != 0:
             sys.exit(f"smoke test: exit code {code} after shutdown")
-        print(f"smoke test passed: ready in {cold_start:.1f}s, clean shutdown", file=sys.stderr)
+        print(f"smoke test passed: ready in {cold_start:.1f}s, setup + DST expansion ok, clean shutdown", file=sys.stderr)
 
 
 def main() -> None:
