@@ -15,6 +15,7 @@ from sqlalchemy import (
     String,
     Table,
     Text,
+    UniqueConstraint,
     text,
 )
 
@@ -158,6 +159,10 @@ events = Table(
     Column("timezone", Text, nullable=False),
     Column("rrule", Text),
     Column("series_id", String(36), ForeignKey("events.id", ondelete="CASCADE")),
+    # set for events imported from a provider calendar; null for Agenda's own events
+    Column(
+        "calendar_source_id", String(36), ForeignKey("calendar_sources.id", ondelete="CASCADE"), index=True
+    ),
     Column("original_start", String),
     Column("status", Text, nullable=False, server_default="confirmed"),
     Column("deleted_at", String),
@@ -180,6 +185,78 @@ events = Table(
         unique=True,
         sqlite_where=text("series_id IS NOT NULL"),
     ),
+)
+
+app_settings = Table(
+    "app_settings",
+    metadata,
+    Column("key", Text, primary_key=True),
+    Column("value", Text, nullable=False),  # JSON
+    Column("updated_at", String, nullable=False),
+)
+
+external_accounts = Table(
+    "external_accounts",
+    metadata,
+    _id(),
+    Column("user_id", String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+    Column("provider", Text, nullable=False),
+    Column("provider_subject", Text, nullable=False),  # the provider's stable user id
+    Column("email", Text, nullable=False),
+    Column("granted_scopes", Text, nullable=False),
+    Column("credential_ref", Text, nullable=False),  # key of the refresh token in the OS vault
+    Column("status", Text, nullable=False, server_default="active"),
+    _revision(),
+    *_stamps(),
+    UniqueConstraint("provider", "provider_subject"),
+    CheckConstraint("provider IN ('google', 'microsoft')", name="provider"),
+    CheckConstraint("status IN ('active', 'needs_reauth')", name="status"),
+)
+
+calendar_sources = Table(
+    "calendar_sources",
+    metadata,
+    _id(),
+    Column(
+        "external_account_id",
+        String(36),
+        ForeignKey("external_accounts.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    Column("space_id", String(36), ForeignKey("spaces.id", ondelete="SET NULL")),
+    Column("provider_calendar_id", Text, nullable=False),
+    Column("name", Text, nullable=False),
+    Column("color", Text, nullable=False),
+    Column("timezone", Text, nullable=False),
+    Column("access_role", Text, nullable=False),
+    Column("is_primary", Boolean, nullable=False, server_default=text("0")),
+    Column("enabled", Boolean, nullable=False, server_default=text("0")),
+    Column("sync_mode", Text, nullable=False, server_default="read_only"),
+    Column("sync_cursor", Text),  # Google nextSyncToken / Graph deltaLink
+    Column("sync_state", Text, nullable=False, server_default="idle"),
+    Column("last_error", Text),  # safe category, never a provider response dump
+    Column("last_synced_at", String),
+    _revision(),
+    *_stamps(),
+    UniqueConstraint("external_account_id", "provider_calendar_id"),
+    CheckConstraint("sync_mode IN ('read_only', 'two_way')", name="sync_mode"),
+    CheckConstraint("sync_state IN ('idle', 'syncing', 'ok', 'error', 'needs_reauth')", name="sync_state"),
+)
+
+event_mappings = Table(
+    "event_mappings",
+    metadata,
+    Column("event_id", String(36), ForeignKey("events.id", ondelete="CASCADE"), primary_key=True),
+    Column(
+        "calendar_source_id",
+        String(36),
+        ForeignKey("calendar_sources.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    Column("provider_event_id", Text, nullable=False),
+    Column("etag", Text),
+    Column("last_synced_revision", Integer, nullable=False),
+    UniqueConstraint("calendar_source_id", "provider_event_id"),
 )
 
 dashboard_profiles = Table(

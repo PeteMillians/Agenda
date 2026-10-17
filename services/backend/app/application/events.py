@@ -32,7 +32,7 @@ from app.application.context import (
 from app.db.tables import events
 from app.domain import recurrence
 from app.domain.clock import iso, new_id, now_iso
-from app.domain.errors import Invalid, NotFound
+from app.domain.errors import Conflict, Invalid, NotFound
 from app.domain.policy import Action
 from app.schemas.events import EventCreate, EventPatch, Scope
 
@@ -130,7 +130,7 @@ def _is_occurrence(rule: str, first: Timing, tz: ZoneInfo, start: date | datetim
 
 def _require_on_pattern(rule: str | None, first: Timing, tz: ZoneInfo) -> None:
     """RFC 5545 treats DTSTART as the first occurrence; dateutil silently skips it if it is off-pattern."""
-    if rule and not _is_occurrence(rule, first, tz, first.start):
+    if rule and not recurrence.start_on_pattern(rule, first.start, tz):
         raise Invalid(
             "The start must fall on the recurrence pattern (e.g. a Tuesday for BYDAY=TU).",
             code="INVALID_RRULE",
@@ -217,6 +217,8 @@ def _occurrence(
         **timing.columns(),
         "timezone": content["timezone"],
         "rrule": master["rrule"],
+        "calendar_source_id": master["calendar_source_id"],
+        "read_only": master["calendar_source_id"] is not None,
     }
 
 
@@ -342,6 +344,11 @@ async def _target(conn: AsyncConnection, ctx: Ctx, event_id: str) -> tuple[RowMa
     row = await load_in_space(conn, ctx, events, event_id, Action.WRITE, "Event")
     if row["deleted_at"]:
         raise NotFound("Event")
+    if row["calendar_source_id"] is not None:
+        # imported read-only (Phase 3); two-way sync arrives in Phase 4
+        raise Conflict(
+            "This event comes from a provider calendar and can't be changed here.", code="READ_ONLY_SOURCE"
+        )
     if row["series_id"] is None:
         return row, None
     master = (await conn.execute(select(events).where(events.c.id == row["series_id"]))).mappings().one()
