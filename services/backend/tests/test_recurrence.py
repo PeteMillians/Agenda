@@ -132,3 +132,17 @@ class TestChoreSchedule:
         anchor = utc(2026, 10, 27, 13)  # Tue 09:00 EDT
         nxt = r.next_datetime(self.RULE, anchor, NY, anchor)
         assert nxt == utc(2026, 11, 3, 14)  # Tue 09:00 EST
+
+
+class TestOffPatternStart:
+    """Imported series can start off-pattern; RFC 5545 still counts DTSTART as an occurrence."""
+
+    def test_dtstart_is_included(self):
+        # starts Monday 2026-10-19, rule says Tuesdays
+        days = r.expand_dates(
+            "FREQ=WEEKLY;BYDAY=TU", date(2026, 10, 19), 1, date(2026, 10, 1), date(2026, 11, 1)
+        )
+        assert days == [date(2026, 10, 19), date(2026, 10, 20), date(2026, 10, 27)]
+
+    def test_dtstart_is_a_member(self):
+        assert r.is_date_occurrence("FREQ=WEEKLY;BYDAY=TU", date(2026, 10, 19), date(2026, 10, 19))

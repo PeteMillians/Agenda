@@ -1,5 +1,7 @@
 """Every route rejects callers that are not the Agenda frontend (spec §06, §16)."""
 
+import pytest
+
 from tests.conftest import AUTH, PORT, TOKEN
 
 
@@ -68,3 +70,20 @@ def test_dev_origin_only_allowed_in_dev(client):
 
 def test_docs_disabled_outside_dev(client):
     assert client.get("/docs", headers=AUTH).status_code == 404
+
+
+@pytest.mark.parametrize("method", ["GET", "POST", "PUT", "PATCH", "DELETE"])
+def test_preflight_allows_every_method_the_api_uses(client, method):
+    res = client.options(
+        "/api/v1/integrations/google/client",
+        headers={"Origin": "http://tauri.localhost", "Access-Control-Request-Method": method},
+    )
+    assert res.status_code == 200, method
+
+
+def test_every_route_method_is_allowed_by_cors(client):
+    """A route using a method CORS does not allow is unreachable from the app (found the hard way: PUT)."""
+    from app.core.security import ALLOWED_METHODS
+
+    used = {m for route in client.app.routes for m in getattr(route, "methods", set())} - {"HEAD", "OPTIONS"}
+    assert used <= set(ALLOWED_METHODS)

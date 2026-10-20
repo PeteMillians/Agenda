@@ -20,3 +20,5 @@ export type EventCreate = Schemas["EventCreate"];
 export type EventPatch = Schemas["EventPatch"];
 export type Dashboard = Schemas["Dashboard"];
 export type WidgetPlacement = Schemas["WidgetPlacement"];
+export type ExternalAccount = Schemas["ExternalAccount"];
+export type CalendarSource = Schemas["CalendarSource"];

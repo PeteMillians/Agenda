@@ -34,6 +34,8 @@ function EventsWidget({ config, spaceIds }: WidgetProps<Config>) {
     return all.flat().sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
   }, [spaceIds.join(), from, to]);
   const { run, error } = useAction(events.reload);
+  const calendars = useLoad(async () => (await call((await api()).GET("/api/v1/calendar-sources"))).data, []);
+  const calendarOf = (id: string | null | undefined) => calendars.data?.find((c) => c.id === id);
 
   const params = (o: Occurrence, scope?: Scope) => ({
     path: { event_id: o.event_id },
@@ -77,6 +79,7 @@ function EventsWidget({ config, spaceIds }: WidgetProps<Config>) {
                 key={`${o.event_id}|${o.occurrence_start}`}
                 occurrence={o}
                 spaceId={spaceIds.length > 1 ? o.spaceId : undefined}
+                calendar={calendarOf(o.calendar_source_id)}
                 onSave={save}
                 onDelete={remove}
               />
@@ -96,6 +99,7 @@ function sortKey(o: Occurrence): string {
 function EventRow(props: {
   occurrence: Occurrence;
   spaceId?: string;
+  calendar?: { name: string; color: string };
   onSave: (o: Occurrence, body: Record<string, unknown>, scope?: Scope) => void;
   onDelete: (o: Occurrence, scope?: Scope) => void;
 }) {
@@ -119,6 +123,11 @@ function EventRow(props: {
         <span>{o.title}</span>
         <div className="meta">
           {props.spaceId && <SpaceDot spaceId={props.spaceId} />}
+          {props.calendar && (
+            <span className="chip" title="From Google Calendar; edit it there" style={{ color: props.calendar.color }}>
+              {props.calendar.name}
+            </span>
+          )}
           {o.location && <span>{o.location}</span>}
           {o.rrule && <span title={o.rrule}>↻ {describeRule(o.rrule)}</span>}
           {o.is_exception && <span>edited occurrence</span>}
@@ -131,7 +140,7 @@ function EventRow(props: {
           />
         )}
       </div>
-      {mode === "idle" && (
+      {mode === "idle" && !o.read_only && (
         <>
           <button className="quiet" onClick={() => setMode("edit")}>
             Edit

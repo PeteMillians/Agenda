@@ -4,6 +4,7 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 
+import httpx
 from fastapi import FastAPI
 from sqlalchemy import text
 
@@ -13,6 +14,8 @@ from app.api.v1 import router as v1_router
 from app.config import Settings
 from app.core.security import install_boundary
 from app.db import SchemaTooNew, checkpoint, make_engine, migrate
+from app.integrations.runtime import SYNC_JOB, Integrations
+from app.integrations.vault import Vault, make_vault
 from app.jobs.worker import Worker
 
 log = logging.getLogger(__name__)
@@ -26,9 +29,15 @@ async def prepare_database(app: FastAPI) -> None:
         engine = make_engine(settings.db_path)
         async with engine.connect() as conn:  # opens the file and applies PRAGMAs (WAL is persistent)
             await conn.execute(text("SELECT 1"))
-        app.state.engine = engine
-        app.state.worker = Worker(engine)
-        app.state.worker.start()  # resumes queued work and reclaims leases left by a crash
+        vault = app.state.vault_override or make_vault(settings.data_dir, dev=settings.dev)
+        integrations = Integrations(engine, app.state.http, vault)
+        worker = Worker(engine, {SYNC_JOB: integrations.sync_calendar})
+        integrations.wake_worker = worker.wake
+        app.state.integrations = integrations
+        app.state.worker = worker
+        app.state.engine = engine  # ready from here on
+        worker.start()  # resumes queued work and reclaims leases left by a crash
+        integrations.start_scheduler()  # first poll runs now: catch up on changes made while closed
         app.state.startup_error = None
         log.info("database ready")
     except SchemaTooNew as exc:
@@ -43,20 +52,31 @@ async def prepare_database(app: FastAPI) -> None:
 async def lifespan(app: FastAPI):
     app.state.engine = None
     app.state.worker = None
+    app.state.integrations = None
     app.state.startup_error = None
+    app.state.http = httpx.AsyncClient(transport=app.state.http_transport, timeout=30)
     task = asyncio.create_task(prepare_database(app))
     yield
     await task
+    if app.state.integrations is not None:
+        await app.state.integrations.stop()
     if app.state.worker is not None:
         await app.state.worker.stop()
     if app.state.engine is not None:
         await app.state.engine.dispose()
         # outside any transaction: SQLite refuses a checkpoint inside one
         await asyncio.to_thread(checkpoint, app.state.settings.db_path)
+    await app.state.http.aclose()
     log.info("backend stopped")
 
 
-def create_app(settings: Settings) -> FastAPI:
+def create_app(
+    settings: Settings,
+    *,
+    http_transport: httpx.AsyncBaseTransport | None = None,
+    vault: Vault | None = None,
+) -> FastAPI:
+    """`http_transport` and `vault` exist for tests (a fake Google, an in-memory vault)."""
     app = FastAPI(
         title="Agenda local API",
         version="0.1.0",
@@ -65,6 +85,8 @@ def create_app(settings: Settings) -> FastAPI:
         redoc_url=None,
     )
     app.state.settings = settings
+    app.state.http_transport = http_transport
+    app.state.vault_override = vault
     install_error_handlers(app)
     install_boundary(app, settings)
     app.include_router(health.router)

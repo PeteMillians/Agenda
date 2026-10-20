@@ -56,6 +56,10 @@ def build(name: str, work: Path) -> Path:
             "--hidden-import=aiosqlite",
             # zoneinfo has no system database on Windows; it reads the tzdata package's files
             "--collect-data=tzdata",
+            # keyring finds OS vault backends through package metadata; without it the frozen
+            # app would silently have no vault
+            "--copy-metadata=keyring",
+            "--collect-submodules=keyring.backends",
         ]
     )
     return work / "dist" / f"{name}{EXE}"
@@ -89,6 +93,10 @@ def exercise_api(port: int, token: str) -> None:
     }
     if hours != {"13", "14"}:  # 09:00 New York on both sides of the DST change
         sys.exit(f"smoke test: time zone expansion is wrong: {sorted(hours)}")
+    vault = send("GET", "/integrations/google/client")["data"]["vault"]
+    if os.name == "nt" and vault != "OS credential vault":
+        sys.exit(f"smoke test: Windows Credential Manager not found by the frozen app (vault={vault})")
+    print(f"smoke test: vault = {vault}", file=sys.stderr)
 
 
 def smoke_test(binary: Path) -> None:
