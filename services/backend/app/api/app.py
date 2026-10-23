@@ -14,7 +14,7 @@ from app.api.v1 import router as v1_router
 from app.config import Settings
 from app.core.security import install_boundary
 from app.db import SchemaTooNew, checkpoint, make_engine, migrate
-from app.integrations.runtime import SYNC_JOB, Integrations
+from app.integrations.runtime import PUSH_JOB, SYNC_JOB, Integrations
 from app.integrations.vault import Vault, make_vault
 from app.jobs.worker import Worker
 
@@ -31,7 +31,12 @@ async def prepare_database(app: FastAPI) -> None:
             await conn.execute(text("SELECT 1"))
         vault = app.state.vault_override or make_vault(settings.data_dir, dev=settings.dev)
         integrations = Integrations(engine, app.state.http, vault)
-        worker = Worker(engine, {SYNC_JOB: integrations.sync_calendar})
+        worker = Worker(
+            engine,
+            {SYNC_JOB: integrations.sync_calendar, PUSH_JOB: integrations.push_calendar},
+            # an Agenda edit to a two-way calendar's event is sent to the provider (spec §10)
+            {kind: [PUSH_JOB] for kind in ("event.created", "event.changed", "event.deleted")},
+        )
         integrations.wake_worker = worker.wake
         app.state.integrations = integrations
         app.state.worker = worker

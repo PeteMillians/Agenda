@@ -1,5 +1,5 @@
-"""Long-lived integration state: HTTP client, vault, pending sign-ins, access tokens, and the
-calendar sync job and poll scheduler (spec §09, §10)."""
+"""Long-lived integration state: HTTP client, vault, pending sign-ins, access tokens, the calendar
+sync and push jobs, and the poll scheduler (spec §09, §10)."""
 
 from __future__ import annotations
 
@@ -15,32 +15,41 @@ from sqlalchemy import or_, select, update
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from app.db.tables import app_settings, calendar_sources, external_accounts
+from app.db.tables import app_settings, calendar_sources, events, external_accounts
 from app.domain.clock import iso, now, now_iso
-from app.integrations.google.client import (
+from app.integrations import push
+from app.integrations.base import (
     AccessExpired,
     AuthRevoked,
-    GoogleClient,
     Grant,
+    ProviderClient,
     ProviderError,
     SyncTokenExpired,
 )
-from app.integrations.google.sync import apply_changes
+from app.integrations.google.client import GoogleClient
+from app.integrations.microsoft.client import MicrosoftClient
 from app.integrations.oauth import PendingAuthorizations
+from app.integrations.providers import CODECS
+from app.integrations.sync import apply_changes
 from app.integrations.vault import Vault
 from app.jobs import queue
 from app.jobs.queue import JobError
 
 log = logging.getLogger(__name__)
 
-GOOGLE_CLIENT_SETTING = "google.oauth_client"
+PROVIDERS = ("google", "microsoft")
+CLIENT_SETTINGS = {"google": "google.oauth_client", "microsoft": "microsoft.oauth_client"}
+GOOGLE_CLIENT_SETTING = CLIENT_SETTINGS["google"]
 POLL_EVERY = timedelta(minutes=5)
 SCHEDULER_TICK_SECONDS = 60
 SYNC_JOB = "calendar.sync"
+PUSH_JOB = "calendar.push"
 
 
 class MissingClient(Exception):
-    pass
+    def __init__(self, provider: str):
+        super().__init__(provider)
+        self.provider = provider
 
 
 class Integrations:
@@ -55,15 +64,20 @@ class Integrations:
 
     # ------------------------------------------------------------------ provider client
 
-    async def google_client(self) -> GoogleClient:
+    async def client(self, provider: str) -> ProviderClient:
         async with self.engine.connect() as conn:
             raw = await conn.scalar(
-                select(app_settings.c.value).where(app_settings.c.key == GOOGLE_CLIENT_SETTING)
+                select(app_settings.c.value).where(app_settings.c.key == CLIENT_SETTINGS[provider])
             )
         if raw is None:
-            raise MissingClient()
+            raise MissingClient(provider)
         config = json.loads(raw)
+        if provider == "microsoft":
+            return MicrosoftClient(self.http, config["client_id"], config.get("tenant") or "common")
         return GoogleClient(self.http, config["client_id"], config["client_secret"])
+
+    async def google_client(self) -> ProviderClient:
+        return await self.client("google")
 
     async def access_token(self, account: RowMapping, *, force: bool = False) -> str:
         cached = self._tokens.get(account["id"])
@@ -72,7 +86,7 @@ class Integrations:
         refresh = self.vault.get(account["credential_ref"]) if self.vault else None
         if not refresh:
             raise AuthRevoked()
-        grant = await (await self.google_client()).refresh(refresh)
+        grant = await (await self.client(account["provider"])).refresh(refresh)
         if grant.refresh_token and grant.refresh_token != refresh and self.vault:
             self.vault.set(account["credential_ref"], grant.refresh_token)  # rotated
         self._tokens[account["id"]] = grant
@@ -121,7 +135,7 @@ class Integrations:
             await self._mark(source_id, "needs_reauth", "needs_reauth")
             return
         try:
-            client = await self.google_client()
+            client = await self.client(account["provider"])
             token = await self.access_token(account)
             cursor = row["sync_cursor"]
             try:
@@ -134,7 +148,9 @@ class Integrations:
                 cursor = None
                 items, next_cursor = await client.list_events(token, row["provider_calendar_id"], None)
             async with self.engine.begin() as conn:
-                summary = await apply_changes(conn, row, items, full=cursor is None)
+                summary = await apply_changes(
+                    conn, row, items, CODECS[account["provider"]], full=cursor is None
+                )
                 await conn.execute(
                     update(calendar_sources)
                     .where(calendar_sources.c.id == source_id)
@@ -156,6 +172,84 @@ class Integrations:
         except ProviderError as exc:
             await self._mark(source_id, "error", exc.category)
             raise JobError(exc.category, retryable=exc.retryable, retry_after=exc.retry_after) from exc
+
+    # ------------------------------------------------------------------ the push job
+
+    async def push_calendar(self, payload: dict[str, Any]) -> None:
+        """Job handler for `calendar.push`: send a two-way calendar's pending Agenda edits.
+        Queued from the outbox for every event change, or directly with a calendar source id."""
+        source_id = payload.get("calendar_source_id")
+        if source_id is None:
+            aggregate = payload["event"]["aggregate"]
+            async with self.engine.connect() as conn:
+                source_id = await conn.scalar(
+                    select(events.c.calendar_source_id).where(events.c.id == aggregate["id"])
+                )
+        if source_id is None:
+            return  # Agenda's own event: nothing to send
+        async with self.engine.connect() as conn:
+            row = (
+                (
+                    await conn.execute(
+                        select(
+                            calendar_sources,
+                            external_accounts.c.provider,
+                            external_accounts.c.status.label("account_status"),
+                        )
+                        .join(
+                            external_accounts,
+                            external_accounts.c.id == calendar_sources.c.external_account_id,
+                        )
+                        .where(calendar_sources.c.id == source_id)
+                    )
+                )
+                .mappings()
+                .first()
+            )
+            account = (
+                (
+                    await conn.execute(
+                        select(external_accounts).where(external_accounts.c.id == row["external_account_id"])
+                    )
+                )
+                .mappings()
+                .first()
+                if row
+                else None
+            )
+        if row is None or account is None or row["sync_mode"] != "two_way" or not row["enabled"]:
+            return
+        if row["account_status"] == "needs_reauth":
+            raise JobError("needs_reauth", retryable=False)
+        try:
+            client = await self.client(account["provider"])
+
+            async def token(force: bool = False) -> str:
+                return await self.access_token(account, force=force)
+
+            summary = await push.push_source(self.engine, row, client, CODECS[account["provider"]], token)
+            log.info("pushed %s: %s", source_id, summary)
+        except MissingClient as exc:
+            await self._mark(source_id, "error", "oauth_client_missing")
+            raise JobError("oauth_client_missing", retryable=False) from exc
+        except AuthRevoked as exc:
+            await self._needs_reauth(account["id"])
+            raise JobError("needs_reauth", retryable=False) from exc
+        except ProviderError as exc:
+            if not exc.retryable:
+                await self._mark(source_id, "error", exc.category)
+            raise JobError(exc.category, retryable=exc.retryable, retry_after=exc.retry_after) from exc
+        if summary.written:
+            # read back right after a local write (spec §10): picks up the provider's own changes
+            await self.enqueue_sync(source_id, dedupe=f"after-push:{now_iso()}")
+
+    async def enqueue_push(self, source_id: str, *, dedupe: str) -> str:
+        async with self.engine.begin() as conn:
+            job_id = await queue.enqueue(
+                conn, PUSH_JOB, {"calendar_source_id": source_id}, idempotency_key=f"{source_id}:{dedupe}"
+            )
+        self.wake_worker()
+        return job_id
 
     async def _mark(self, source_id: str, state: str, error: str | None) -> None:
         async with self.engine.begin() as conn:

@@ -6,7 +6,7 @@ from datetime import date, datetime
 from typing import Annotated, Literal, Self
 from uuid import UUID
 
-from pydantic import AwareDatetime, BaseModel, StringConstraints, model_validator
+from pydantic import AwareDatetime, BaseModel, Field, StringConstraints, model_validator
 
 from app.schemas.common import LongText, Name, TimeZoneName
 
@@ -25,6 +25,10 @@ class EventCreate(BaseModel):
     end_date: date | None = None  # exclusive: a one-day event ends the next day
     timezone: TimeZoneName | None = None  # defaults to the owner's time zone
     rrule: str | None = None
+    calendar_source_id: UUID | None = Field(
+        default=None,
+        description="Also create it in this two-way provider calendar (it must feed this space).",
+    )
 
     @model_validator(mode="after")
     def _timing(self) -> Self:
@@ -96,4 +100,4 @@ class Occurrence(BaseModel):
     timezone: str
     rrule: str | None
     calendar_source_id: UUID | None = None
-    read_only: bool = False  # imported events can't be edited until two-way sync (Phase 4)
+    read_only: bool = False  # from a provider calendar that isn't switched to two-way sync

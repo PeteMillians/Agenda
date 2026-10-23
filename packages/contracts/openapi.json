@@ -60,6 +60,23 @@
             "title": "Name",
             "type": "string"
           },
+          "open_conflicts": {
+            "title": "Open Conflicts",
+            "type": "integer"
+          },
+          "pending_changes": {
+            "description": "Agenda edits not yet accepted by the provider",
+            "title": "Pending Changes",
+            "type": "integer"
+          },
+          "provider": {
+            "enum": [
+              "google",
+              "microsoft"
+            ],
+            "title": "Provider",
+            "type": "string"
+          },
           "revision": {
             "title": "Revision",
             "type": "integer"
@@ -103,6 +120,7 @@
         "required": [
           "id",
           "external_account_id",
+          "provider",
           "account_email",
           "name",
           "color",
@@ -115,13 +133,15 @@
           "sync_state",
           "last_error",
           "last_synced_at",
+          "pending_changes",
+          "open_conflicts",
           "revision"
         ],
         "title": "CalendarSource",
         "type": "object"
       },
       "CalendarSourcePatch": {
-        "description": "Attach to a space and turn import on or off. Moving to another space moves its events;\nturning it off removes the imported copies (Google keeps the originals).",
+        "description": "Attach to a space and turn import on or off. Moving to another space moves its events;\nturning it off removes the imported copies (the provider keeps the originals). `two_way`\nlets Agenda edit the calendar's events; it needs write access at the provider.",
         "properties": {
           "enabled": {
             "anyOf": [
@@ -145,6 +165,21 @@
               }
             ],
             "title": "Space Id"
+          },
+          "sync_mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "read_only",
+                  "two_way"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sync Mode"
           }
         },
         "title": "CalendarSourcePatch",
@@ -161,6 +196,24 @@
           "removed"
         ],
         "title": "Cleared",
+        "type": "object"
+      },
+      "ConflictResolution": {
+        "properties": {
+          "resolution": {
+            "enum": [
+              "keep_local",
+              "keep_remote",
+              "keep_both"
+            ],
+            "title": "Resolution",
+            "type": "string"
+          }
+        },
+        "required": [
+          "resolution"
+        ],
+        "title": "ConflictResolution",
         "type": "object"
       },
       "ConnectStart": {
@@ -751,6 +804,27 @@
         "title": "Envelope[list[Space]]",
         "type": "object"
       },
+      "Envelope_list_SyncConflict__": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/SyncConflict"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data",
+          "request_id"
+        ],
+        "title": "Envelope[list[SyncConflict]]",
+        "type": "object"
+      },
       "ErrorBody": {
         "properties": {
           "code": {
@@ -970,6 +1044,19 @@
             "default": false,
             "title": "All Day",
             "type": "boolean"
+          },
+          "calendar_source_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Also create it in this two-way provider calendar (it must feed this space).",
+            "title": "Calendar Source Id"
           },
           "description": {
             "default": "",
@@ -1197,8 +1284,115 @@
         "title": "EventPatch",
         "type": "object"
       },
+      "EventVersion": {
+        "properties": {
+          "all_day": {
+            "title": "All Day",
+            "type": "boolean"
+          },
+          "deleted": {
+            "default": false,
+            "title": "Deleted",
+            "type": "boolean"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "end_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End At"
+          },
+          "end_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Date"
+          },
+          "location": {
+            "title": "Location",
+            "type": "string"
+          },
+          "rrule": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rrule"
+          },
+          "start_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start At"
+          },
+          "start_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Date"
+          },
+          "timezone": {
+            "title": "Timezone",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "description",
+          "location",
+          "all_day",
+          "start_at",
+          "end_at",
+          "start_date",
+          "end_date",
+          "timezone",
+          "rrule"
+        ],
+        "title": "EventVersion",
+        "type": "object"
+      },
       "ExternalAccount": {
         "properties": {
+          "can_write": {
+            "description": "Event write access was granted (needed for two-way sync)",
+            "title": "Can Write",
+            "type": "boolean"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -1247,6 +1441,7 @@
           "email",
           "status",
           "granted_scopes",
+          "can_write",
           "revision",
           "created_at"
         ],
@@ -1635,6 +1830,29 @@
         "title": "ListSummary",
         "type": "object"
       },
+      "MicrosoftClientIn": {
+        "description": "From the Microsoft Entra admin center: App registrations > your app > Overview.",
+        "properties": {
+          "client_id": {
+            "description": "\"Application (client) ID\"",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "title": "Client Id",
+            "type": "string"
+          },
+          "tenant": {
+            "default": "common",
+            "description": "common (work, school, and personal accounts), consumers (personal only), organizations, or a directory (tenant) id for a single-tenant app",
+            "pattern": "^[\\w.-]{1,100}$",
+            "title": "Tenant",
+            "type": "string"
+          }
+        },
+        "required": [
+          "client_id"
+        ],
+        "title": "MicrosoftClientIn",
+        "type": "object"
+      },
       "OAuthClientIn": {
         "description": "From Google Cloud Console: an OAuth client of type \"Desktop app\".",
         "properties": {
@@ -1674,6 +1892,23 @@
             "title": "Configured",
             "type": "boolean"
           },
+          "redirect_uri": {
+            "description": "The redirect URI to register with the provider",
+            "title": "Redirect Uri",
+            "type": "string"
+          },
+          "tenant": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Microsoft only: the sign-in authority",
+            "title": "Tenant"
+          },
           "vault": {
             "anyOf": [
               {
@@ -1690,7 +1925,8 @@
         "required": [
           "configured",
           "client_id",
-          "vault"
+          "vault",
+          "redirect_uri"
         ],
         "title": "OAuthClientStatus",
         "type": "object"
@@ -2239,6 +2475,75 @@
           }
         },
         "title": "SpacePatch",
+        "type": "object"
+      },
+      "SyncConflict": {
+        "description": "Agenda and the provider both changed an event. Nothing is overwritten until it's resolved.",
+        "properties": {
+          "calendar_name": {
+            "title": "Calendar Name",
+            "type": "string"
+          },
+          "calendar_source_id": {
+            "format": "uuid",
+            "title": "Calendar Source Id",
+            "type": "string"
+          },
+          "can_keep_both": {
+            "title": "Can Keep Both",
+            "type": "boolean"
+          },
+          "detected_at": {
+            "format": "date-time",
+            "title": "Detected At",
+            "type": "string"
+          },
+          "event_id": {
+            "format": "uuid",
+            "title": "Event Id",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "local": {
+            "$ref": "#/components/schemas/EventVersion",
+            "description": "Agenda's version, as it is now"
+          },
+          "provider": {
+            "enum": [
+              "google",
+              "microsoft"
+            ],
+            "title": "Provider",
+            "type": "string"
+          },
+          "remote": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EventVersion"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The provider's version; null if deleted there"
+          }
+        },
+        "required": [
+          "id",
+          "event_id",
+          "calendar_source_id",
+          "calendar_name",
+          "provider",
+          "detected_at",
+          "local",
+          "remote",
+          "can_keep_both"
+        ],
+        "title": "SyncConflict",
         "type": "object"
       },
       "SyncStarted": {
@@ -4437,10 +4742,227 @@
         ]
       }
     },
-    "/api/v1/integrations/google/connect/start": {
+    "/api/v1/integrations/microsoft/client": {
+      "get": {
+        "operationId": "microsoft_client_api_v1_integrations_microsoft_client_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_OAuthClientStatus_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "428": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Precondition Required"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Microsoft Client",
+        "tags": [
+          "integrations"
+        ]
+      },
+      "put": {
+        "operationId": "set_microsoft_client_api_v1_integrations_microsoft_client_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MicrosoftClientIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_OAuthClientStatus_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "428": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Precondition Required"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Set Microsoft Client",
+        "tags": [
+          "integrations"
+        ]
+      }
+    },
+    "/api/v1/integrations/{provider}/connect/start": {
       "post": {
-        "description": "Begin OAuth (PKCE + state). Open the returned URL in the system browser.",
-        "operationId": "connect_google_api_v1_integrations_google_connect_start_post",
+        "description": "Begin OAuth (PKCE + state). Open the returned URL in the system browser. Signing in again\nwith `write=true` upgrades an existing account in place.",
+        "operationId": "connect_api_v1_integrations__provider__connect_start_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider",
+            "required": true,
+            "schema": {
+              "enum": [
+                "google",
+                "microsoft"
+              ],
+              "title": "Provider",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Also ask for event write access (two-way sync)",
+            "in": "query",
+            "name": "write",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Also ask for event write access (two-way sync)",
+              "title": "Write",
+              "type": "boolean"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -4523,7 +5045,7 @@
             "description": "Service Unavailable"
           }
         },
-        "summary": "Connect Google",
+        "summary": "Connect",
         "tags": [
           "integrations"
         ]
@@ -7351,6 +7873,204 @@
         "summary": "Create Task",
         "tags": [
           "tasks"
+        ]
+      }
+    },
+    "/api/v1/sync-conflicts": {
+      "get": {
+        "description": "Events changed both in Agenda and at the provider. Neither side is overwritten until resolved.",
+        "operationId": "list_conflicts_api_v1_sync_conflicts_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_list_SyncConflict__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "428": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Precondition Required"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "List Conflicts",
+        "tags": [
+          "integrations"
+        ]
+      }
+    },
+    "/api/v1/sync-conflicts/{conflict_id}/resolve": {
+      "post": {
+        "operationId": "resolve_conflict_api_v1_sync_conflicts__conflict_id__resolve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conflict_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Conflict Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConflictResolution"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "428": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Precondition Required"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Resolve Conflict",
+        "tags": [
+          "integrations"
         ]
       }
     },

@@ -7,36 +7,17 @@ Google sends recurring events as a master (with `recurrence` lines) plus instanc
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from app.domain import recurrence
 from app.domain.clock import iso
+from app.integrations.base import Incoming, Unsupported
+
+__all__ = ["Incoming", "Unsupported", "client_key", "instance_id", "local_id", "parse", "to_google"]
 
 log = logging.getLogger(__name__)
-
-
-class Unsupported(Exception):
-    """An event Agenda cannot represent faithfully; it is skipped and counted, not guessed at."""
-
-
-@dataclass(frozen=True)
-class Incoming:
-    provider_id: str
-    etag: str | None
-    cancelled: bool
-    series_provider_id: str | None = None  # set on instance overrides
-    original_key: str | None = None  # occurrence key the override replaces
-    content: dict[str, str] = field(default_factory=dict)  # title, description, location, timezone
-    timing: dict[str, str | None] | None = None  # start_at/end_at or start_date/end_date
-    rrule: str | None = None
-    exdate_keys: tuple[str, ...] = ()
-
-    @property
-    def is_instance(self) -> bool:
-        return self.series_provider_id is not None
 
 
 def _zone(name: str | None, fallback: str) -> str:
@@ -100,7 +81,7 @@ def parse(item: dict[str, Any], calendar_timezone: str) -> Incoming:
     original = _key(item["originalStartTime"]) if "originalStartTime" in item else None
     if cancelled and "start" not in item:
         # deletions in incremental sync carry little more than the id
-        return Incoming(provider_id, item.get("etag"), True, series, original)
+        return Incoming(provider_id, item.get("etag"), True, series, original, raw=item)
 
     tz_name = _zone(item.get("start", {}).get("timeZone"), calendar_timezone)
     timing = _timing(item)
@@ -135,4 +116,67 @@ def parse(item: dict[str, Any], calendar_timezone: str) -> Incoming:
         timing=timing,
         rrule=rule,
         exdate_keys=tuple(exdates),
+        raw=item,
     )
+
+
+# --------------------------------------------------------------------------- Agenda -> Google
+
+
+def _google_rule(rule: str, tz: ZoneInfo, all_day: bool) -> str:
+    """Agenda keeps UNTIL as local wall time; RFC 5545 (and Google) want UTC, or a date."""
+    parts = recurrence.parse_parts(rule)
+    until = parts.get("UNTIL")
+    if until:
+        if all_day:
+            parts["UNTIL"] = until[:8]
+        else:
+            local = datetime.strptime(until, recurrence.LOCAL_FORMAT)
+            parts["UNTIL"] = recurrence.to_utc(local, tz).strftime("%Y%m%dT%H%M%SZ")
+    return "RRULE:" + recurrence.format_parts(parts)
+
+
+def _moment(row: dict[str, Any], which: str, tz: ZoneInfo) -> dict[str, str]:
+    if row["start_date"]:
+        return {"date": row[f"{which}_date"]}
+    local = datetime.fromisoformat(row[f"{which}_at"]).astimezone(tz)
+    return {"dateTime": local.isoformat(), "timeZone": tz.key}
+
+
+def to_google(row: dict[str, Any]) -> dict[str, Any]:
+    """The event body for a single event, series master, or (with series_id) instance override."""
+    tz = ZoneInfo(row["timezone"])
+    body: dict[str, Any] = {
+        "summary": row["title"],
+        "description": row["description"],
+        "location": row["location"],
+        "start": _moment(row, "start", tz),
+        "end": _moment(row, "end", tz),
+        "status": "confirmed",
+    }
+    if row["series_id"] is None:
+        body["recurrence"] = (
+            [_google_rule(row["rrule"], tz, row["start_date"] is not None)] if row["rrule"] else []
+        )
+    return body
+
+
+def instance_id(master_provider_id: str, key: str) -> str:
+    """Google's id for one occurrence of a series: `<master>_<original start, UTC basic format>`
+    (or `_<YYYYMMDD>` for all-day series)."""
+    if len(key) == 10:
+        return f"{master_provider_id}_{key.replace('-', '')}"
+    return f"{master_provider_id}_{datetime.fromisoformat(key).astimezone(UTC).strftime('%Y%m%dT%H%M%SZ')}"
+
+
+def client_key(event_id: str) -> str:
+    """A Google-valid event id (base32hex, 5-1024 chars) derived from Agenda's UUID."""
+    return event_id.replace("-", "")
+
+
+def local_id(provider_id: str) -> str | None:
+    """The Agenda UUID behind a `client_key`, if `provider_id` is one."""
+    if len(provider_id) != 32 or any(c not in "0123456789abcdef" for c in provider_id):
+        return None
+    p = provider_id
+    return f"{p[:8]}-{p[8:12]}-{p[12:16]}-{p[16:20]}-{p[20:]}"

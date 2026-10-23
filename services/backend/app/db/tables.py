@@ -166,6 +166,8 @@ events = Table(
     Column("original_start", String),
     Column("status", Text, nullable=False, server_default="confirmed"),
     Column("deleted_at", String),
+    # an Agenda edit to a two-way calendar's event that the provider hasn't accepted yet (ADR 0005)
+    Column("needs_push", Boolean, nullable=False, server_default=text("0")),
     _revision(),
     *_stamps(),
     CheckConstraint("status IN ('confirmed', 'cancelled')", name="status"),
@@ -257,6 +259,37 @@ event_mappings = Table(
     Column("etag", Text),
     Column("last_synced_revision", Integer, nullable=False),
     UniqueConstraint("calendar_source_id", "provider_event_id"),
+)
+
+sync_conflicts = Table(
+    "sync_conflicts",
+    metadata,
+    _id(),
+    Column("event_id", String(36), ForeignKey("events.id", ondelete="CASCADE"), nullable=False),
+    Column(
+        "calendar_source_id",
+        String(36),
+        ForeignKey("calendar_sources.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    Column("local_snapshot", Text, nullable=False),  # JSON: Agenda's version
+    Column("remote_snapshot", Text),  # JSON: the provider's version; null when deleted there
+    Column("local_revision", Integer, nullable=False),
+    Column("remote_version", Text),  # ETag / changeKey of remote_snapshot
+    Column("detected_at", String, nullable=False),
+    Column("status", Text, nullable=False, server_default="open"),
+    Column("resolution", Text),
+    Column("resolved_at", String),
+    CheckConstraint("status IN ('open', 'resolved', 'superseded')", name="status"),
+    CheckConstraint(
+        "resolution IS NULL OR resolution IN ('keep_local', 'keep_remote', 'keep_both')", name="resolution"
+    ),
+    Index(
+        "uq_sync_conflicts_open_event",
+        "event_id",
+        unique=True,
+        sqlite_where=text("status = 'open'"),
+    ),
 )
 
 dashboard_profiles = Table(
