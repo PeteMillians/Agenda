@@ -1,4 +1,4 @@
-import type { Occurrence } from "@agenda/contracts";
+import type { CalendarSource, Occurrence } from "@agenda/contracts";
 import { useState } from "react";
 import { z } from "zod";
 import { api } from "../api/backend";
@@ -52,7 +52,7 @@ function EventsWidget({ config, spaceIds }: WidgetProps<Config>) {
 
   return (
     <div className="widget-content">
-      <NewEvent spaceIds={spaceIds} onDone={events.reload} />
+      <NewEvent spaceIds={spaceIds} calendars={calendars.data ?? []} onDone={events.reload} />
       <div className="range">
         <button className="quiet" aria-label="Earlier" onClick={() => setFrom(addDays(from, -config.days))}>
           ←
@@ -92,6 +92,8 @@ function EventsWidget({ config, spaceIds }: WidgetProps<Config>) {
   );
 }
 
+const providerLabel = (c: CalendarSource) => (c.provider === "microsoft" ? "Outlook" : "Google Calendar");
+
 function sortKey(o: Occurrence): string {
   return o.start_at ? new Date(o.start_at).toISOString() : `${o.start_date}T00:00:00.000Z`;
 }
@@ -99,7 +101,7 @@ function sortKey(o: Occurrence): string {
 function EventRow(props: {
   occurrence: Occurrence;
   spaceId?: string;
-  calendar?: { name: string; color: string };
+  calendar?: CalendarSource;
   onSave: (o: Occurrence, body: Record<string, unknown>, scope?: Scope) => void;
   onDelete: (o: Occurrence, scope?: Scope) => void;
 }) {
@@ -124,7 +126,15 @@ function EventRow(props: {
         <div className="meta">
           {props.spaceId && <SpaceDot spaceId={props.spaceId} />}
           {props.calendar && (
-            <span className="chip" title="From Google Calendar; edit it there" style={{ color: props.calendar.color }}>
+            <span
+              className="chip"
+              title={
+                o.read_only
+                  ? `From ${providerLabel(props.calendar)} (read-only); edit it there`
+                  : `Synced both ways with ${providerLabel(props.calendar)}`
+              }
+              style={{ color: props.calendar.color }}
+            >
               {props.calendar.name}
             </span>
           )}
@@ -230,7 +240,7 @@ function EventEditor(props: { occurrence: Occurrence; onSave: (body: Record<stri
   );
 }
 
-function NewEvent(props: { spaceIds: string[]; onDone: () => Promise<void> }) {
+function NewEvent(props: { spaceIds: string[]; calendars: CalendarSource[]; onDone: () => Promise<void> }) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [space, setSpace] = useState(props.spaceIds[0]);
@@ -242,8 +252,13 @@ function NewEvent(props: { spaceIds: string[]; onDone: () => Promise<void> }) {
   const [frequency, setFrequency] = useState<Frequency>("");
   const { run, error } = useAction(props.onDone);
   const spaceId = props.spaceIds.includes(space) ? space : props.spaceIds[0];
+  // two-way calendars feeding this space can hold the new event too (spec §07)
+  const targets = props.calendars.filter((c) => c.enabled && c.sync_mode === "two_way" && c.space_id === spaceId);
+  const [target, setTarget] = useState("");
+  const calendar = targets.find((c) => c.id === target);
+  const outlook = calendar?.provider === "microsoft"; // Outlook series are edited in Outlook
 
-  const rrule = !frequency ? null : frequency === "WEEKLY" ? `FREQ=WEEKLY;BYDAY=${weekdayCode(day)}` : `FREQ=${frequency}`;
+  const rrule = !frequency || outlook ? null : frequency === "WEEKLY" ? `FREQ=WEEKLY;BYDAY=${weekdayCode(day)}` : `FREQ=${frequency}`;
   const timing = allDay
     ? { all_day: true, start_date: day, end_date: addDays(day, 1) }
     : { start_at: localToIso(day, start), end_at: localToIso(day, end) };
@@ -259,7 +274,7 @@ function NewEvent(props: { spaceIds: string[]; onDone: () => Promise<void> }) {
           await call(
             (await api()).POST("/api/v1/spaces/{space_id}/events", {
               params: { path: { space_id: spaceId } },
-              body: { title, location, rrule, ...timing },
+              body: { title, location, rrule, ...timing, calendar_source_id: calendar?.id ?? null },
             }),
           );
           setTitle("");
@@ -300,9 +315,27 @@ function NewEvent(props: { spaceIds: string[]; onDone: () => Promise<void> }) {
               </label>
             </>
           )}
+          {targets.length > 0 && (
+            <label>
+              Calendar
+              <select value={calendar?.id ?? ""} onChange={(e) => setTarget(e.target.value)}>
+                <option value="">Agenda only</option>
+                {targets.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} ({providerLabel(c)})
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <label>
             Repeats
-            <select value={frequency} onChange={(e) => setFrequency(e.target.value as Frequency)}>
+            <select
+              value={outlook ? "" : frequency}
+              disabled={outlook}
+              title={outlook ? "Create repeating Outlook events in Outlook" : undefined}
+              onChange={(e) => setFrequency(e.target.value as Frequency)}
+            >
               <option value="">Doesn't repeat</option>
               <option value="DAILY">Daily</option>
               <option value="WEEKLY">Weekly on {weekdayCode(day)}</option>

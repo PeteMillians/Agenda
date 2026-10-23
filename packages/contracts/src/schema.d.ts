@@ -191,7 +191,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/integrations/google/connect/start": {
+    "/api/v1/integrations/microsoft/client": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Microsoft Client */
+        get: operations["microsoft_client_api_v1_integrations_microsoft_client_get"];
+        /** Set Microsoft Client */
+        put: operations["set_microsoft_client_api_v1_integrations_microsoft_client_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integrations/{provider}/connect/start": {
         parameters: {
             query?: never;
             header?: never;
@@ -201,10 +219,11 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Connect Google
-         * @description Begin OAuth (PKCE + state). Open the returned URL in the system browser.
+         * Connect
+         * @description Begin OAuth (PKCE + state). Open the returned URL in the system browser. Signing in again
+         *     with `write=true` upgrades an existing account in place.
          */
-        post: operations["connect_google_api_v1_integrations_google_connect_start_post"];
+        post: operations["connect_api_v1_integrations__provider__connect_start_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -463,6 +482,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sync-conflicts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Conflicts
+         * @description Events changed both in Agenda and at the provider. Neither side is overwritten until resolved.
+         */
+        get: operations["list_conflicts_api_v1_sync_conflicts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sync-conflicts/{conflict_id}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resolve Conflict */
+        post: operations["resolve_conflict_api_v1_sync_conflicts__conflict_id__resolve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sync/run": {
         parameters: {
             query?: never;
@@ -590,6 +646,18 @@ export interface components {
             last_synced_at: string | null;
             /** Name */
             name: string;
+            /** Open Conflicts */
+            open_conflicts: number;
+            /**
+             * Pending Changes
+             * @description Agenda edits not yet accepted by the provider
+             */
+            pending_changes: number;
+            /**
+             * Provider
+             * @enum {string}
+             */
+            provider: "google" | "microsoft";
             /** Revision */
             revision: number;
             /** Space Id */
@@ -610,18 +678,29 @@ export interface components {
         /**
          * CalendarSourcePatch
          * @description Attach to a space and turn import on or off. Moving to another space moves its events;
-         *     turning it off removes the imported copies (Google keeps the originals).
+         *     turning it off removes the imported copies (the provider keeps the originals). `two_way`
+         *     lets Agenda edit the calendar's events; it needs write access at the provider.
          */
         CalendarSourcePatch: {
             /** Enabled */
             enabled?: boolean | null;
             /** Space Id */
             space_id?: string | null;
+            /** Sync Mode */
+            sync_mode?: ("read_only" | "two_way") | null;
         };
         /** Cleared */
         Cleared: {
             /** Removed */
             removed: number;
+        };
+        /** ConflictResolution */
+        ConflictResolution: {
+            /**
+             * Resolution
+             * @enum {string}
+             */
+            resolution: "keep_local" | "keep_remote" | "keep_both";
         };
         /** ConnectStart */
         ConnectStart: {
@@ -827,6 +906,13 @@ export interface components {
             /** Request Id */
             request_id: string;
         };
+        /** Envelope[list[SyncConflict]] */
+        Envelope_list_SyncConflict__: {
+            /** Data */
+            data: components["schemas"]["SyncConflict"][];
+            /** Request Id */
+            request_id: string;
+        };
         /** ErrorBody */
         ErrorBody: {
             /** Code */
@@ -911,6 +997,11 @@ export interface components {
              */
             all_day?: boolean;
             /**
+             * Calendar Source Id
+             * @description Also create it in this two-way provider calendar (it must feed this space).
+             */
+            calendar_source_id?: string | null;
+            /**
              * Description
              * @default
              */
@@ -962,8 +1053,41 @@ export interface components {
             /** Title */
             title?: string | null;
         };
+        /** EventVersion */
+        EventVersion: {
+            /** All Day */
+            all_day: boolean;
+            /**
+             * Deleted
+             * @default false
+             */
+            deleted?: boolean;
+            /** Description */
+            description: string;
+            /** End At */
+            end_at: string | null;
+            /** End Date */
+            end_date: string | null;
+            /** Location */
+            location: string;
+            /** Rrule */
+            rrule: string | null;
+            /** Start At */
+            start_at: string | null;
+            /** Start Date */
+            start_date: string | null;
+            /** Timezone */
+            timezone: string;
+            /** Title */
+            title: string;
+        };
         /** ExternalAccount */
         ExternalAccount: {
+            /**
+             * Can Write
+             * @description Event write access was granted (needed for two-way sync)
+             */
+            can_write: boolean;
             /**
              * Created At
              * Format: date-time
@@ -1170,6 +1294,23 @@ export interface components {
             updated_at: string;
         };
         /**
+         * MicrosoftClientIn
+         * @description From the Microsoft Entra admin center: App registrations > your app > Overview.
+         */
+        MicrosoftClientIn: {
+            /**
+             * Client Id
+             * @description "Application (client) ID"
+             */
+            client_id: string;
+            /**
+             * Tenant
+             * @description common (work, school, and personal accounts), consumers (personal only), organizations, or a directory (tenant) id for a single-tenant app
+             * @default common
+             */
+            tenant?: string;
+        };
+        /**
          * OAuthClientIn
          * @description From Google Cloud Console: an OAuth client of type "Desktop app".
          */
@@ -1185,6 +1326,16 @@ export interface components {
             client_id: string | null;
             /** Configured */
             configured: boolean;
+            /**
+             * Redirect Uri
+             * @description The redirect URI to register with the provider
+             */
+            redirect_uri: string;
+            /**
+             * Tenant
+             * @description Microsoft only: the sign-in authority
+             */
+            tenant?: string | null;
             /**
              * Vault
              * @description Where refresh tokens are kept; null means accounts can't be connected
@@ -1396,6 +1547,45 @@ export interface components {
             name?: string | null;
             /** Type */
             type?: ("personal" | "work" | "family" | "custom") | null;
+        };
+        /**
+         * SyncConflict
+         * @description Agenda and the provider both changed an event. Nothing is overwritten until it's resolved.
+         */
+        SyncConflict: {
+            /** Calendar Name */
+            calendar_name: string;
+            /**
+             * Calendar Source Id
+             * Format: uuid
+             */
+            calendar_source_id: string;
+            /** Can Keep Both */
+            can_keep_both: boolean;
+            /**
+             * Detected At
+             * Format: date-time
+             */
+            detected_at: string;
+            /**
+             * Event Id
+             * Format: uuid
+             */
+            event_id: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** @description Agenda's version, as it is now */
+            local: components["schemas"]["EventVersion"];
+            /**
+             * Provider
+             * @enum {string}
+             */
+            provider: "google" | "microsoft";
+            /** @description The provider's version; null if deleted there */
+            remote: components["schemas"]["EventVersion"] | null;
         };
         /** SyncStarted */
         SyncStarted: {
@@ -2933,11 +3123,186 @@ export interface operations {
             };
         };
     };
-    connect_google_api_v1_integrations_google_connect_start_post: {
+    microsoft_client_api_v1_integrations_microsoft_client_get: {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_OAuthClientStatus_"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Precondition Required */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    set_microsoft_client_api_v1_integrations_microsoft_client_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MicrosoftClientIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_OAuthClientStatus_"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Precondition Required */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    connect_api_v1_integrations__provider__connect_start_post: {
+        parameters: {
+            query?: {
+                /** @description Also ask for event write access (two-way sync) */
+                write?: boolean;
+            };
+            header?: never;
+            path: {
+                provider: "google" | "microsoft";
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -5134,6 +5499,176 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Envelope_Task_"];
                 };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Precondition Required */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    list_conflicts_api_v1_sync_conflicts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_list_SyncConflict__"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Precondition Required */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    resolve_conflict_api_v1_sync_conflicts__conflict_id__resolve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conflict_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConflictResolution"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Unauthorized */
             401: {
