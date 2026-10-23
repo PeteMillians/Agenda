@@ -1,25 +1,29 @@
 from __future__ import annotations
 
 from html import escape
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, Query, Request, Response
 from fastapi.responses import HTMLResponse
 
 from app.api.deps import CtxDep, IfMatch
 from app.api.errors import ERROR_RESPONSES, Envelope
 from app.application import integrations as service
 from app.domain.errors import AppError, Unavailable
-from app.integrations.google.client import ProviderError
+from app.integrations.base import ProviderError
+from app.integrations.providers import LABELS
 from app.integrations.runtime import Integrations
 from app.schemas.integrations import (
     CalendarSource,
     CalendarSourcePatch,
+    ConflictResolution,
     ConnectStart,
     ExternalAccount,
+    MicrosoftClientIn,
     OAuthClientIn,
     OAuthClientStatus,
+    SyncConflict,
     SyncStarted,
 )
 
@@ -33,6 +37,7 @@ def integrations(request: Request) -> Integrations:
 
 
 IntegrationsDep = Annotated[Integrations, Depends(integrations)]
+ProviderPath = Literal["google", "microsoft"]
 
 
 @router.get("/integrations/google/client", response_model=Envelope[OAuthClientStatus])
@@ -45,10 +50,27 @@ async def set_google_client(ctx: CtxDep, deps: IntegrationsDep, body: OAuthClien
     return {"data": await service.set_client(ctx, deps, body), "request_id": ctx.request_id}
 
 
-@router.post("/integrations/google/connect/start", response_model=Envelope[ConnectStart])
-async def connect_google(ctx: CtxDep, request: Request, deps: IntegrationsDep):
-    """Begin OAuth (PKCE + state). Open the returned URL in the system browser."""
-    url = await service.start_google(ctx, deps, request.app.state.settings.port)
+@router.get("/integrations/microsoft/client", response_model=Envelope[OAuthClientStatus])
+async def microsoft_client(ctx: CtxDep, deps: IntegrationsDep):
+    return {"data": await service.client_status(ctx, deps, "microsoft"), "request_id": ctx.request_id}
+
+
+@router.put("/integrations/microsoft/client", response_model=Envelope[OAuthClientStatus])
+async def set_microsoft_client(ctx: CtxDep, deps: IntegrationsDep, body: MicrosoftClientIn):
+    return {"data": await service.set_microsoft_client(ctx, deps, body), "request_id": ctx.request_id}
+
+
+@router.post("/integrations/{provider}/connect/start", response_model=Envelope[ConnectStart])
+async def connect(
+    ctx: CtxDep,
+    request: Request,
+    deps: IntegrationsDep,
+    provider: ProviderPath,
+    write: Annotated[bool, Query(description="Also ask for event write access (two-way sync)")] = False,
+):
+    """Begin OAuth (PKCE + state). Open the returned URL in the system browser. Signing in again
+    with `write=true` upgrades an existing account in place."""
+    url = await service.start(ctx, deps, provider, request.app.state.settings.port, write=write)
     return {"data": {"authorization_url": url}, "request_id": ctx.request_id}
 
 
@@ -61,25 +83,57 @@ def _page(title: str, body: str, status: int = 200) -> HTMLResponse:
     return HTMLResponse(PAGE.format(title=escape(title), body=escape(body)), status_code=status)
 
 
-@router.get("/integrations/google/callback", include_in_schema=False)
-async def google_callback(request: Request, state: str = "", code: str = "", error: str = "") -> HTMLResponse:
-    """Loopback redirect from Google. The browser has no launch secret, so this route is public
-    and trusts only a one-time state issued by this process."""
+# What Entra's AADSTS codes usually mean for this app; the code itself is safe to show.
+ENTRA_HINTS = {
+    "AADSTS50011": "the redirect URI isn't registered. Add the one shown in Agenda under"
+    " Authentication > Mobile and desktop applications",
+    "AADSTS700016": "the application (client) ID wasn't found in this directory. Check the ID, or set"
+    " the sign-in authority to match the app's supported account types",
+    "AADSTS50020": "this account type isn't allowed by the app registration. Allow personal Microsoft"
+    " accounts, or use the matching sign-in authority",
+    "AADSTS50194": "the app is single-tenant. Set the sign-in authority to your directory (tenant) ID",
+    "AADSTS9002346": "the app is for personal accounts only. Set the sign-in authority to consumers",
+    "AADSTS65001": "consent was not granted",
+}
+
+
+def _sign_in_error(provider: str, error: str, description: str) -> str:
+    label = LABELS[provider]
+    if error == "access_denied" and "AADSTS" not in description:
+        return f"{label} sign-in was cancelled. You can close this tab."
+    for code, hint in ENTRA_HINTS.items():
+        if code in description:
+            return f"Microsoft refused the sign-in ({code}): {hint}."
+    return f"{label} refused the sign-in ({escape(error)[:60]}). Check the app registration, then try again."
+
+
+@router.get("/integrations/{provider}/callback", include_in_schema=False)
+async def oauth_callback(
+    request: Request,
+    provider: ProviderPath,
+    state: str = "",
+    code: str = "",
+    error: str = "",
+    error_description: str = "",
+) -> HTMLResponse:
+    """Loopback redirect from the provider. The browser has no launch secret, so this route is
+    public and trusts only a one-time state issued by this process."""
     deps = getattr(request.app.state, "integrations", None)
     if deps is None:
         return _page("Agenda isn't ready", "Wait a moment and try connecting again.", 503)
+    label = LABELS[provider]
     if error:
         deps.pending.take(state)
-        return _page("Not connected", "Google sign-in was cancelled. You can close this tab.", 400)
+        return _page("Not connected", _sign_in_error(provider, error, error_description), 400)
     try:
-        email = await service.complete_google(deps, state, code)
+        email = await service.complete(deps, provider, state, code)
     except AppError as exc:
         return _page("Not connected", exc.message, exc.status)
     except ProviderError as exc:
         return _page(
-            "Not connected", f"Google returned an error ({exc.category}). Try again from Agenda.", 502
+            "Not connected", f"{label} returned an error ({exc.category}). Try again from Agenda.", 502
         )
-    return _page("Connected", f"Agenda can now read {email}'s calendars. You can close this tab.")
+    return _page("Connected", f"Agenda is connected to {email}'s calendars. You can close this tab.")
 
 
 @router.get("/external-accounts", response_model=Envelope[list[ExternalAccount]])
@@ -119,6 +173,18 @@ async def update_source(
 async def sync_source(ctx: CtxDep, deps: IntegrationsDep, source_id: UUID):
     job_id = await service.sync_now(ctx, deps, str(source_id))
     return {"data": {"job_ids": [job_id]}, "request_id": ctx.request_id}
+
+
+@router.get("/sync-conflicts", response_model=Envelope[list[SyncConflict]])
+async def list_conflicts(ctx: CtxDep):
+    """Events changed both in Agenda and at the provider. Neither side is overwritten until resolved."""
+    return {"data": await service.list_conflicts(ctx), "request_id": ctx.request_id}
+
+
+@router.post("/sync-conflicts/{conflict_id}/resolve", status_code=204)
+async def resolve_conflict(ctx: CtxDep, deps: IntegrationsDep, conflict_id: UUID, body: ConflictResolution):
+    await service.resolve_conflict(ctx, deps, str(conflict_id), body.resolution)
+    return Response(status_code=204)
 
 
 @router.post("/sync/run", status_code=202, response_model=Envelope[SyncStarted])
