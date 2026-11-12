@@ -42,6 +42,15 @@ export function formatDay(day: string): string {
 }
 
 const DAY_NAMES: Record<string, string> = { MO: "Mon", TU: "Tue", WE: "Wed", TH: "Thu", FR: "Fri", SA: "Sat", SU: "Sun" };
+const FULL_DAY_NAMES: Record<string, string> = {
+  MO: "Monday",
+  TU: "Tuesday",
+  WE: "Wednesday",
+  TH: "Thursday",
+  FR: "Friday",
+  SA: "Saturday",
+  SU: "Sunday",
+};
 const UNITS: Record<string, [string, string]> = {
   DAILY: ["daily", "days"],
   WEEKLY: ["weekly", "weeks"],
@@ -49,15 +58,29 @@ const UNITS: Record<string, [string, string]> = {
   YEARLY: ["yearly", "years"],
 };
 
-/** "weekly on Tue", "every 2 weeks on Mon, Wed", "monthly until Dec 31". Falls back to the raw rule. */
+/** "weekly on Tue", "every 2 weeks on Mon, Wed", "monthly on the 2nd Tuesday", "monthly on the 15th",
+ * "monthly until Dec 31". Falls back to the raw rule. */
 export function describeRule(rule: string): string {
   const parts = Object.fromEntries(rule.split(";").map((p) => p.split("=") as [string, string]));
   const unit = UNITS[parts.FREQ];
-  const known = new Set(["FREQ", "INTERVAL", "BYDAY", "UNTIL", "COUNT"]);
-  if (!unit || Object.keys(parts).some((k) => !known.has(k)) || /\d/.test(parts.BYDAY ?? "")) return rule;
+  const known = new Set(["FREQ", "INTERVAL", "BYDAY", "BYMONTHDAY", "UNTIL", "COUNT"]);
+  if (!unit || Object.keys(parts).some((k) => !known.has(k)) || (parts.BYDAY && parts.BYMONTHDAY)) return rule;
+  let on = "";
+  if (parts.BYDAY && /\d/.test(parts.BYDAY)) {
+    // numbered weekdays ("2TU", "-1FR") only make sense monthly, and only all-numbered
+    const days = parts.BYDAY.split(",").map((d) => /^(-1|[1-5])(MO|TU|WE|TH|FR|SA|SU)$/.exec(d));
+    if (parts.FREQ !== "MONTHLY" || days.some((m) => !m)) return rule;
+    on = `the ${days.map((m) => `${m![1] === "-1" ? "last" : ordinal(Number(m![1]))} ${FULL_DAY_NAMES[m![2]]}`).join(", ")}`;
+  } else if (parts.BYDAY) {
+    on = parts.BYDAY.split(",").map((d) => DAY_NAMES[d] ?? d).join(", ");
+  } else if (parts.BYMONTHDAY) {
+    const days = parts.BYMONTHDAY.split(",");
+    if (parts.FREQ !== "MONTHLY" || days.some((d) => !/^\d+$/.test(d) || Number(d) < 1 || Number(d) > 31)) return rule;
+    on = `the ${days.map((d) => ordinal(Number(d))).join(", ")}`;
+  }
   const interval = Number(parts.INTERVAL ?? 1);
   let text = interval > 1 ? `every ${interval} ${unit[1]}` : unit[0];
-  if (parts.BYDAY) text += ` on ${parts.BYDAY.split(",").map((d) => DAY_NAMES[d] ?? d).join(", ")}`;
+  if (on) text += ` on ${on}`;
   if (parts.UNTIL) {
     const u = parts.UNTIL;
     text += ` until ${formatDay(`${u.slice(0, 4)}-${u.slice(4, 6)}-${u.slice(6, 8)}`)}`;
@@ -70,4 +93,10 @@ export function describeRule(rule: string): string {
   }
   if (parts.COUNT) text += `, ${parts.COUNT} times`;
   return text;
+}
+
+/** 1 -> "1st", 22 -> "22nd", 13 -> "13th". */
+function ordinal(n: number): string {
+  const suffix = n % 100 >= 11 && n % 100 <= 13 ? "th" : ({ 1: "st", 2: "nd", 3: "rd" } as Record<number, string>)[n % 10];
+  return `${n}${suffix ?? "th"}`;
 }
