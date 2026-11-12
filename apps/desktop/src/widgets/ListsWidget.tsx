@@ -174,7 +174,7 @@ function Items({ listId }: { listId: string }) {
             key={item.id}
             item={item}
             onToggle={() => patchItem(item, { checked: !item.checked })}
-            onRename={(text) => patchItem(item, { text })}
+            onRename={(newText) => patchItem(item, { text: newText })}
             onRemove={() =>
               run(async () =>
                 call(
@@ -211,7 +211,7 @@ function ItemRow(props: { item: ListItem; onToggle: () => void; onRename: (text:
       <input type="checkbox" aria-label={`Check ${item.text}`} checked={item.checked} onChange={props.onToggle} />
       {editing ? (
         <form
-          className="grow"
+          className="form-grid grow"
           onSubmit={(e) => {
             e.preventDefault();
             setEditing(false);
@@ -220,6 +220,7 @@ function ItemRow(props: { item: ListItem; onToggle: () => void; onRename: (text:
           }}
         >
           <input
+            className="grow"
             aria-label={`New text for ${item.text}`}
             value={text}
             onChange={(e) => setText(e.target.value)}
