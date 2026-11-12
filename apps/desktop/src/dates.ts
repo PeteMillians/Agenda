@@ -64,17 +64,19 @@ export function describeRule(rule: string): string {
   const parts = Object.fromEntries(rule.split(";").map((p) => p.split("=") as [string, string]));
   const unit = UNITS[parts.FREQ];
   const known = new Set(["FREQ", "INTERVAL", "BYDAY", "BYMONTHDAY", "UNTIL", "COUNT"]);
-  if (!unit || Object.keys(parts).some((k) => !known.has(k)) || (parts.BYDAY && parts.BYMONTHDAY)) return rule;
+  if (!unit || Object.keys(parts).some((k) => !known.has(k)) || ("BYDAY" in parts && "BYMONTHDAY" in parts)) return rule;
   let on = "";
   if (parts.BYDAY && /\d/.test(parts.BYDAY)) {
     // numbered weekdays ("2TU", "-1FR") only make sense monthly, and only all-numbered
-    const days = parts.BYDAY.split(",").map((d) => /^(-1|[1-5])(MO|TU|WE|TH|FR|SA|SU)$/.exec(d));
-    if (parts.FREQ !== "MONTHLY" || days.some((m) => !m)) return rule;
-    on = `the ${days.map((m) => `${m![1] === "-1" ? "last" : ordinal(Number(m![1]))} ${FULL_DAY_NAMES[m![2]]}`).join(", ")}`;
+    const matches = parts.BYDAY.split(",").map((d) => /^(-1|[1-5])(MO|TU|WE|TH|FR|SA|SU)$/.exec(d));
+    if (parts.FREQ !== "MONTHLY" || matches.some((m) => !m)) return rule;
+    const named = matches.map((m) => `${m![1] === "-1" ? "last" : ordinal(Number(m![1]))} ${FULL_DAY_NAMES[m![2]]}`);
+    on = `the ${named.join(", ")}`;
   } else if (parts.BYDAY) {
     on = parts.BYDAY.split(",").map((d) => DAY_NAMES[d] ?? d).join(", ");
-  } else if (parts.BYMONTHDAY) {
-    const days = parts.BYMONTHDAY.split(",");
+  } else if ("BYMONTHDAY" in parts) {
+    // an empty or valueless BYMONTHDAY falls back rather than silently dropping the day
+    const days = (parts.BYMONTHDAY ?? "").split(",");
     if (parts.FREQ !== "MONTHLY" || days.some((d) => !/^\d+$/.test(d) || Number(d) < 1 || Number(d) > 31)) return rule;
     on = `the ${days.map((d) => ordinal(Number(d))).join(", ")}`;
   }
@@ -97,6 +99,6 @@ export function describeRule(rule: string): string {
 
 /** 1 -> "1st", 22 -> "22nd", 13 -> "13th". */
 function ordinal(n: number): string {
-  const suffix = n % 100 >= 11 && n % 100 <= 13 ? "th" : ({ 1: "st", 2: "nd", 3: "rd" } as Record<number, string>)[n % 10];
-  return `${n}${suffix ?? "th"}`;
+  if (n % 100 >= 11 && n % 100 <= 13) return `${n}th`;
+  return `${n}${["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
 }
