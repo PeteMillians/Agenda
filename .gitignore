@@ -29,3 +29,7 @@ target/
 # Sidecar executables built by packaging/build_sidecar.py
 apps/desktop/src-tauri/binaries/
 .data/
+
+# Software factory runtime state and job worktrees
+/factory/jobs/
+/.worktrees/
