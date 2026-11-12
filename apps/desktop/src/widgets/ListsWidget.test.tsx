@@ -20,7 +20,8 @@ function item(id: string, text: string, position: number): ListItem {
     position,
     revision: position + 3,
     created_at: "2026-01-01T00:00:00Z",
-  } as ListItem;
+    updated_at: "2026-01-01T00:00:00Z",
+  };
 }
 
 const list = { id: "list-1", space_id: "space-1", name: "Groceries", revision: 1, item_count: 2, checked_count: 0 };
@@ -95,6 +96,15 @@ describe("ListsWidget item editing", () => {
     const input = await startEditing();
     fireEvent.change(input, { target: { value: "Changed" } });
     fireEvent.keyDown(input, { key: "Escape" });
+    expect(client.PATCH).not.toHaveBeenCalled();
+    expect(screen.queryByRole("textbox", { name: "New text for Milk" })).toBeNull();
+    expect(screen.getByText("Milk")).toBeTruthy();
+  });
+
+  it("cancels on blur", async () => {
+    const input = await startEditing();
+    fireEvent.change(input, { target: { value: "Changed" } });
+    fireEvent.blur(input);
     expect(client.PATCH).not.toHaveBeenCalled();
     expect(screen.queryByRole("textbox", { name: "New text for Milk" })).toBeNull();
     expect(screen.getByText("Milk")).toBeTruthy();
