@@ -114,7 +114,8 @@ function Items({ listId }: { listId: string }) {
 
   return (
     <div>
-      <div className="list-head">
+      {/* While confirming, wrap the header so the note sits under the name instead of squeezing it. */}
+      <div className={confirming ? "list-head form-grid" : "list-head"}>
         {renaming && list ? (
           <form
             className="grow"
@@ -139,7 +140,7 @@ function Items({ listId }: { listId: string }) {
         {list &&
           !renaming &&
           (confirming ? (
-            <span className="scope">
+            <span className="scope wide">
               This list and its items will be removed from Agenda.
               <button
                 onClick={() => {

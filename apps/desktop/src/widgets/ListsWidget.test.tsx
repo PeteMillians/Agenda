@@ -39,6 +39,7 @@ describe("Lists widget archive", () => {
     expect(DELETE).toHaveBeenCalledWith("/api/v1/lists/{list_id}", {
       params: { path: { list_id: "list-1" }, header: { "if-match": "7" } },
     });
+    expect(screen.queryByText("This list and its items will be removed from Agenda.")).toBeNull();
   });
 
   it("cancels without a call", async () => {
