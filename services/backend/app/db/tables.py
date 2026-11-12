@@ -166,8 +166,6 @@ events = Table(
     Column("original_start", String),
     Column("status", Text, nullable=False, server_default="confirmed"),
     Column("deleted_at", String),
-    # an Agenda edit to a two-way calendar's event that the provider hasn't accepted yet (ADR 0005)
-    Column("needs_push", Boolean, nullable=False, server_default=text("0")),
     _revision(),
     *_stamps(),
     CheckConstraint("status IN ('confirmed', 'cancelled')", name="status"),
@@ -258,6 +256,9 @@ event_mappings = Table(
     Column("provider_event_id", Text, nullable=False),
     Column("etag", Text),
     Column("last_synced_revision", Integer, nullable=False),
+    # canonical JSON of the content both sides last agreed on; a row whose content no longer matches
+    # it has a local change waiting to be pushed (null: no baseline yet, treated as clean)
+    Column("synced_snapshot", Text),
     UniqueConstraint("calendar_source_id", "provider_event_id"),
 )
 
@@ -271,11 +272,12 @@ sync_conflicts = Table(
         String(36),
         ForeignKey("calendar_sources.id", ondelete="CASCADE"),
         nullable=False,
+        index=True,
     ),
-    Column("local_snapshot", Text, nullable=False),  # JSON: Agenda's version
-    Column("remote_snapshot", Text),  # JSON: the provider's version; null when deleted there
+    Column("local_snapshot", Text, nullable=False),  # JSON
+    Column("remote_snapshot", Text, nullable=False),  # JSON; {"deleted": true} when the provider deleted it
     Column("local_revision", Integer, nullable=False),
-    Column("remote_version", Text),  # ETag / changeKey of remote_snapshot
+    Column("remote_version", Text),  # ETag/changeKey seen; null when deleted at the provider
     Column("detected_at", String, nullable=False),
     Column("status", Text, nullable=False, server_default="open"),
     Column("resolution", Text),
@@ -284,12 +286,7 @@ sync_conflicts = Table(
     CheckConstraint(
         "resolution IS NULL OR resolution IN ('keep_local', 'keep_remote', 'keep_both')", name="resolution"
     ),
-    Index(
-        "uq_sync_conflicts_open_event",
-        "event_id",
-        unique=True,
-        sqlite_where=text("status = 'open'"),
-    ),
+    Index("uq_sync_conflicts_open_event", "event_id", unique=True, sqlite_where=text("status = 'open'")),
 )
 
 dashboard_profiles = Table(

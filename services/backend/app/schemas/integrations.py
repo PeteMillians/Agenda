@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from datetime import date, datetime
-from typing import Annotated, Literal
+from datetime import datetime
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field, StringConstraints
 
 Provider = Literal["google", "microsoft"]
+Resolution = Literal["keep_local", "keep_remote", "keep_both"]
 
 
 class OAuthClientStatus(BaseModel):
@@ -15,37 +16,17 @@ class OAuthClientStatus(BaseModel):
     vault: str | None = Field(
         description="Where refresh tokens are kept; null means accounts can't be connected"
     )
-    tenant: str | None = Field(default=None, description="Microsoft only: the sign-in authority")
-    redirect_uri: str = Field(description="The redirect URI to register with the provider")
+    redirect_uri: str | None = Field(
+        None, description="Microsoft only: the redirect URI to register for the app in Azure"
+    )
 
 
 class OAuthClientIn(BaseModel):
-    """From Google Cloud Console: an OAuth client of type "Desktop app"."""
+    """Google: an OAuth client of type "Desktop app" (ID and secret). Microsoft: the application
+    (client) ID of an app registration for personal accounts; it has no secret."""
 
-    client_id: Annotated[
-        str, StringConstraints(strip_whitespace=True, pattern=r"^[\w.-]+\.apps\.googleusercontent\.com$")
-    ]
-    client_secret: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
-
-
-class MicrosoftClientIn(BaseModel):
-    """From the Microsoft Entra admin center: App registrations > your app > Overview."""
-
-    client_id: Annotated[
-        str,
-        StringConstraints(
-            strip_whitespace=True,
-            pattern=r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-        ),
-    ] = Field(description='"Application (client) ID"')
-    tenant: Annotated[
-        str,
-        StringConstraints(strip_whitespace=True, pattern=r"^[\w.-]{1,100}$"),
-    ] = Field(
-        default="common",
-        description="common (work, school, and personal accounts), consumers (personal only), "
-        "organizations, or a directory (tenant) id for a single-tenant app",
-    )
+    client_id: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
+    client_secret: Annotated[str, StringConstraints(strip_whitespace=True, max_length=200)] | None = None
 
 
 class ConnectStart(BaseModel):
@@ -58,7 +39,6 @@ class ExternalAccount(BaseModel):
     email: str
     status: Literal["active", "needs_reauth"]
     granted_scopes: list[str]
-    can_write: bool = Field(description="Event write access was granted (needed for two-way sync)")
     revision: int
     created_at: datetime
 
@@ -66,8 +46,8 @@ class ExternalAccount(BaseModel):
 class CalendarSource(BaseModel):
     id: UUID
     external_account_id: UUID
-    provider: Provider
     account_email: str
+    provider: Provider
     name: str
     color: str
     timezone: str
@@ -76,55 +56,50 @@ class CalendarSource(BaseModel):
     enabled: bool
     space_id: UUID | None
     sync_mode: Literal["read_only", "two_way"]
+    can_write: bool = Field(description="The account has granted event write access")
     sync_state: Literal["idle", "syncing", "ok", "error", "needs_reauth"]
     last_error: str | None
     last_synced_at: datetime | None
-    pending_changes: int = Field(description="Agenda edits not yet accepted by the provider")
+    pending_changes: int = Field(description="Local changes not yet sent to the provider")
     open_conflicts: int
     revision: int
 
 
 class CalendarSourcePatch(BaseModel):
     """Attach to a space and turn import on or off. Moving to another space moves its events;
-    turning it off removes the imported copies (the provider keeps the originals). `two_way`
-    lets Agenda edit the calendar's events; it needs write access at the provider."""
+    turning it off removes the imported copies (the provider keeps the originals).
+    `sync_mode=two_way` lets its events be edited here; switching back discards unpushed edits."""
 
     space_id: UUID | None = None
     enabled: bool | None = None
     sync_mode: Literal["read_only", "two_way"] | None = None
 
 
-class EventVersion(BaseModel):
-    title: str
-    description: str
-    location: str
-    all_day: bool
-    start_at: datetime | None
-    end_at: datetime | None
-    start_date: date | None
-    end_date: date | None
-    timezone: str
-    rrule: str | None
-    deleted: bool = False
+class SyncStarted(BaseModel):
+    job_ids: list[UUID]
 
 
 class SyncConflict(BaseModel):
-    """Agenda and the provider both changed an event. Nothing is overwritten until it's resolved."""
+    """The same event changed here and at the provider (spec §10). Snapshots hold the fields
+    being compared: title, description, location, timezone, timing, rrule, status; or
+    `{"deleted": true}` when that side deleted it."""
 
     id: UUID
     event_id: UUID
     calendar_source_id: UUID
     calendar_name: str
+    calendar_color: str
     provider: Provider
+    title: str
+    kind: Literal["single", "series", "occurrence"]
+    local: dict[str, Any]
+    remote: dict[str, Any]
+    choices: list[Resolution] = Field(description="keep_both is offered only when neither side deleted it")
     detected_at: datetime
-    local: EventVersion = Field(description="Agenda's version, as it is now")
-    remote: EventVersion | None = Field(description="The provider's version; null if deleted there")
-    can_keep_both: bool
+    status: Literal["open", "resolved", "superseded"]
+    resolution: Resolution | None
+    resolved_at: datetime | None
 
 
-class ConflictResolution(BaseModel):
-    resolution: Literal["keep_local", "keep_remote", "keep_both"]
-
-
-class SyncStarted(BaseModel):
-    job_ids: list[UUID]
+class ResolveConflict(BaseModel):
+    resolution: Resolution

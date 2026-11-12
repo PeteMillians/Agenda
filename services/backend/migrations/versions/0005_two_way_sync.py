@@ -1,8 +1,8 @@
-"""two-way sync: pending pushes and sync conflicts
+"""two-way sync and conflicts
 
 Revision ID: 0005
 Revises: 0004
-Create Date: 2026-10-23 00:30:00.000000
+Create Date: 2026-10-19 10:00:00.000000
 """
 
 import sqlalchemy as sa
@@ -15,17 +15,15 @@ depends_on = None
 
 
 def upgrade() -> None:
-    with op.batch_alter_table("events", schema=None) as batch_op:
-        batch_op.add_column(
-            sa.Column("needs_push", sa.Boolean(), server_default=sa.text("0"), nullable=False)
-        )
+    with op.batch_alter_table("event_mappings", schema=None) as batch_op:
+        batch_op.add_column(sa.Column("synced_snapshot", sa.Text(), nullable=True))
     op.create_table(
         "sync_conflicts",
         sa.Column("id", sa.String(length=36), nullable=False),
         sa.Column("event_id", sa.String(length=36), nullable=False),
         sa.Column("calendar_source_id", sa.String(length=36), nullable=False),
         sa.Column("local_snapshot", sa.Text(), nullable=False),
-        sa.Column("remote_snapshot", sa.Text(), nullable=True),
+        sa.Column("remote_snapshot", sa.Text(), nullable=False),
         sa.Column("local_revision", sa.Integer(), nullable=False),
         sa.Column("remote_version", sa.Text(), nullable=True),
         sa.Column("detected_at", sa.String(), nullable=False),
@@ -51,6 +49,9 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id", name=op.f("pk_sync_conflicts")),
     )
     op.create_index(
+        op.f("ix_sync_conflicts_calendar_source_id"), "sync_conflicts", ["calendar_source_id"], unique=False
+    )
+    op.create_index(
         "uq_sync_conflicts_open_event",
         "sync_conflicts",
         ["event_id"],
@@ -61,6 +62,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_index("uq_sync_conflicts_open_event", table_name="sync_conflicts")
+    op.drop_index(op.f("ix_sync_conflicts_calendar_source_id"), table_name="sync_conflicts")
     op.drop_table("sync_conflicts")
-    with op.batch_alter_table("events", schema=None) as batch_op:
-        batch_op.drop_column("needs_push")
+    with op.batch_alter_table("event_mappings", schema=None) as batch_op:
+        batch_op.drop_column("synced_snapshot")

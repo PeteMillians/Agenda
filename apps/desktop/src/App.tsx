@@ -72,6 +72,8 @@ function Home() {
   const [selected, setSelected] = useState<string | null>(remembered);
   const [view, setView] = useState<"dashboard" | "spaces" | "calendars">("dashboard");
   useCalendarFreshness();
+  const sources = useLoad(async () => (await call((await api()).GET("/api/v1/calendar-sources"))).data, []);
+  const openConflicts = (sources.data ?? []).reduce((sum, s) => sum + s.open_conflicts, 0);
   const [newName, setNewName] = useState("");
   const [problem, setProblem] = useState<string>();
   const [generation, setGeneration] = useState(0); // bumped to remount a dashboard with server state
@@ -150,6 +152,11 @@ function Home() {
         <div className="sidebar-foot">
           <button className={view === "calendars" ? "space active" : "space"} onClick={() => setView("calendars")}>
             Calendars
+            {openConflicts > 0 && (
+              <span className="badge" title="Sync conflicts waiting for a decision">
+                {openConflicts}
+              </span>
+            )}
           </button>
           <button className={view === "spaces" ? "space active" : "space"} onClick={() => setView("spaces")}>
             Spaces

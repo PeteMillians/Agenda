@@ -33,8 +33,8 @@ async def prepare_database(app: FastAPI) -> None:
         integrations = Integrations(engine, app.state.http, vault)
         worker = Worker(
             engine,
-            {SYNC_JOB: integrations.sync_calendar, PUSH_JOB: integrations.push_calendar},
-            # an Agenda edit to a two-way calendar's event is sent to the provider (spec §10)
+            {SYNC_JOB: integrations.sync_calendar, PUSH_JOB: integrations.push_for_event},
+            # a local edit in a two-way calendar is pushed right away (spec §10)
             {kind: [PUSH_JOB] for kind in ("event.created", "event.changed", "event.deleted")},
         )
         integrations.wake_worker = worker.wake

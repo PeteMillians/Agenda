@@ -20,27 +20,27 @@ TAURI_ORIGINS = ["tauri://localhost", "http://tauri.localhost"]  # macOS/Linux, 
 DEV_ORIGINS = ["http://localhost:1420"]  # Vite under `tauri dev`
 ALLOWED_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"]  # every method a route uses (tested)
 
-# The OAuth callbacks are opened by the system browser, which has no launch secret; they are
+# OAuth callbacks are opened by the system browser, which has no launch secret; they are
 # protected by a one-time state instead (spec §07).
-MICROSOFT_CALLBACK = "/api/v1/integrations/microsoft/callback"
-PUBLIC_PATHS = {"/health/live", "/health/ready", "/api/v1/integrations/google/callback", MICROSOFT_CALLBACK}
+CALLBACK_PATHS = {"/api/v1/integrations/google/callback", "/api/v1/integrations/microsoft/callback"}
+PUBLIC_PATHS = {"/health/live", "/health/ready", *CALLBACK_PATHS}
+# Microsoft only accepts `localhost` as a loopback redirect host, so that callback alone may
+# arrive under that name; a DNS-rebound page cannot use it, as the name never leaves the machine.
+LOCALHOST_PATHS = {"/api/v1/integrations/microsoft/callback"}
 DEV_PUBLIC_PATHS = {"/docs", "/openapi.json"}
 
 
 def install_boundary(app: FastAPI, settings: Settings) -> None:
     expected_host = f"127.0.0.1:{settings.port}"
-    # Entra only ignores the port of `localhost` redirect URIs, so its callback arrives by that name
-    # (ADR 0005). A rebinding attacker's page can't send this Host, so the guard still holds.
-    callback_host = f"localhost:{settings.port}"
+    localhost_host = f"localhost:{settings.port}"
     expected_auth = f"Bearer {settings.token}".encode()
     public = PUBLIC_PATHS | (DEV_PUBLIC_PATHS if settings.dev else set())
 
     @app.middleware("http")
     async def local_boundary(request: Request, call_next):
         host = request.headers.get("host")
-        if host != expected_host and not (host == callback_host and request.url.path == MICROSOFT_CALLBACK):
-            # DNS-rebinding guard
-            return error_response(request, 400, "BAD_HOST", "Unexpected Host header.")
+        if host != expected_host and not (host == localhost_host and request.url.path in LOCALHOST_PATHS):
+            return error_response(request, 400, "BAD_HOST", "Unexpected Host header.")  # DNS-rebinding guard
         if request.url.path not in public:
             supplied = request.headers.get("authorization", "").encode()
             if not hmac.compare_digest(supplied, expected_auth):

@@ -1,5 +1,5 @@
-"""Long-lived integration state: HTTP client, vault, pending sign-ins, access tokens, the calendar
-sync and push jobs, and the poll scheduler (spec §09, §10)."""
+"""Long-lived integration state: HTTP client, vault, pending sign-ins, access tokens, and the
+calendar sync jobs and poll scheduler (spec §09, §10)."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import asyncio
 import contextlib
 import json
 import logging
+from collections.abc import Sequence
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -17,19 +18,12 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.db.tables import app_settings, calendar_sources, events, external_accounts
 from app.domain.clock import iso, now, now_iso
-from app.integrations import push
-from app.integrations.base import (
-    AccessExpired,
-    AuthRevoked,
-    Grant,
-    ProviderClient,
-    ProviderError,
-    SyncTokenExpired,
-)
-from app.integrations.google.client import GoogleClient
-from app.integrations.microsoft.client import MicrosoftClient
+from app.integrations.errors import AccessExpired, AuthRevoked, CursorExpired, ProviderError
+from app.integrations.google.client import GoogleCalendar
+from app.integrations.microsoft.client import MicrosoftCalendar
+from app.integrations.model import CalendarProvider, Grant
 from app.integrations.oauth import PendingAuthorizations
-from app.integrations.providers import CODECS
+from app.integrations.push import push
 from app.integrations.sync import apply_changes
 from app.integrations.vault import Vault
 from app.jobs import queue
@@ -38,18 +32,24 @@ from app.jobs.queue import JobError
 log = logging.getLogger(__name__)
 
 PROVIDERS = ("google", "microsoft")
-CLIENT_SETTINGS = {"google": "google.oauth_client", "microsoft": "microsoft.oauth_client"}
-GOOGLE_CLIENT_SETTING = CLIENT_SETTINGS["google"]
 POLL_EVERY = timedelta(minutes=5)
 SCHEDULER_TICK_SECONDS = 60
 SYNC_JOB = "calendar.sync"
-PUSH_JOB = "calendar.push"
+PUSH_JOB = "calendar.push"  # fanned out from event.* outbox rows: sync right after a local write
+
+
+def client_setting(provider: str) -> str:
+    return f"{provider}.oauth_client"
+
+
+def can_write(provider: str, scopes: Sequence[str]) -> bool:
+    """Whether granted scopes allow event writes. No database access, so it is safe inside a
+    transaction."""
+    return (MicrosoftCalendar if provider == "microsoft" else GoogleCalendar).can_write(scopes)
 
 
 class MissingClient(Exception):
-    def __init__(self, provider: str):
-        super().__init__(provider)
-        self.provider = provider
+    pass
 
 
 class Integrations:
@@ -64,20 +64,17 @@ class Integrations:
 
     # ------------------------------------------------------------------ provider client
 
-    async def client(self, provider: str) -> ProviderClient:
+    async def provider(self, name: str) -> CalendarProvider:
         async with self.engine.connect() as conn:
             raw = await conn.scalar(
-                select(app_settings.c.value).where(app_settings.c.key == CLIENT_SETTINGS[provider])
+                select(app_settings.c.value).where(app_settings.c.key == client_setting(name))
             )
         if raw is None:
-            raise MissingClient(provider)
+            raise MissingClient()
         config = json.loads(raw)
-        if provider == "microsoft":
-            return MicrosoftClient(self.http, config["client_id"], config.get("tenant") or "common")
-        return GoogleClient(self.http, config["client_id"], config["client_secret"])
-
-    async def google_client(self) -> ProviderClient:
-        return await self.client("google")
+        if name == "microsoft":
+            return MicrosoftCalendar(self.http, config["client_id"])
+        return GoogleCalendar(self.http, config["client_id"], config["client_secret"])
 
     async def access_token(self, account: RowMapping, *, force: bool = False) -> str:
         cached = self._tokens.get(account["id"])
@@ -86,7 +83,7 @@ class Integrations:
         refresh = self.vault.get(account["credential_ref"]) if self.vault else None
         if not refresh:
             raise AuthRevoked()
-        grant = await (await self.client(account["provider"])).refresh(refresh)
+        grant = await (await self.provider(account["provider"])).refresh(refresh)
         if grant.refresh_token and grant.refresh_token != refresh and self.vault:
             self.vault.set(account["credential_ref"], grant.refresh_token)  # rotated
         self._tokens[account["id"]] = grant
@@ -101,20 +98,12 @@ class Integrations:
     # ------------------------------------------------------------------ the sync job
 
     async def sync_calendar(self, payload: dict[str, Any]) -> None:
-        """Job handler for `calendar.sync`. Idempotent: replaying it re-reads from the cursor."""
+        """Job handler for `calendar.sync`: pull, then push local changes of a two-way calendar.
+        Idempotent: replaying it re-reads from the cursor and pushes whatever is still pending."""
         source_id = payload["calendar_source_id"]
         async with self.engine.connect() as conn:
             row = (
-                (
-                    await conn.execute(
-                        select(calendar_sources, external_accounts.c.status.label("account_status"))
-                        .join(
-                            external_accounts,
-                            external_accounts.c.id == calendar_sources.c.external_account_id,
-                        )
-                        .where(calendar_sources.c.id == source_id)
-                    )
-                )
+                (await conn.execute(select(calendar_sources).where(calendar_sources.c.id == source_id)))
                 .mappings()
                 .first()
             )
@@ -131,38 +120,38 @@ class Integrations:
             )
         if row is None or account is None or not row["enabled"] or row["space_id"] is None:
             return  # detached or disabled since the job was queued
-        if row["account_status"] == "needs_reauth":
+        if account["status"] == "needs_reauth":
             await self._mark(source_id, "needs_reauth", "needs_reauth")
             return
         try:
-            client = await self.client(account["provider"])
+            provider = await self.provider(account["provider"])
             token = await self.access_token(account)
             cursor = row["sync_cursor"]
             try:
-                items, next_cursor = await client.list_events(token, row["provider_calendar_id"], cursor)
+                changes = await provider.changes(token, row, cursor)
             except AccessExpired:
                 token = await self.access_token(account, force=True)
-                items, next_cursor = await client.list_events(token, row["provider_calendar_id"], cursor)
-            except SyncTokenExpired:
+                changes = await provider.changes(token, row, cursor)
+            except CursorExpired:
                 log.info("sync token expired for %s; running a full sync", source_id)
-                cursor = None
-                items, next_cursor = await client.list_events(token, row["provider_calendar_id"], None)
+                changes = await provider.changes(token, row, None)
             async with self.engine.begin() as conn:
-                summary = await apply_changes(
-                    conn, row, items, CODECS[account["provider"]], full=cursor is None
-                )
+                summary = await apply_changes(conn, row, changes)
                 await conn.execute(
                     update(calendar_sources)
                     .where(calendar_sources.c.id == source_id)
-                    .values(
-                        sync_cursor=next_cursor,
-                        sync_state="ok",
-                        last_error=None,
-                        last_synced_at=now_iso(),
-                        updated_at=now_iso(),
-                    )
+                    .values(sync_cursor=changes.cursor, updated_at=now_iso())
                 )
-            log.info("synced %s: %s", source_id, summary)
+            log.info("pulled %s: %s", source_id, summary)
+            problem = None
+            if row["sync_mode"] == "two_way":
+                if provider.can_write(account["granted_scopes"].split()):
+                    pushed = await push(self.engine, provider, token, row)
+                    log.info("pushed %s: %s", source_id, pushed)
+                    problem = "unsupported_change" if pushed.unsupported else None
+                else:
+                    problem = "write_access_required"
+            await self._mark(source_id, "error" if problem else "ok", problem, synced=True)
         except MissingClient as exc:
             await self._mark(source_id, "error", "oauth_client_missing")
             raise JobError("oauth_client_missing", retryable=False) from exc
@@ -170,93 +159,30 @@ class Integrations:
             await self._needs_reauth(account["id"])
             raise JobError("needs_reauth", retryable=False) from exc
         except ProviderError as exc:
+            if isinstance(exc, AccessExpired):
+                self.forget(account["id"])  # the next attempt refreshes
             await self._mark(source_id, "error", exc.category)
             raise JobError(exc.category, retryable=exc.retryable, retry_after=exc.retry_after) from exc
 
-    # ------------------------------------------------------------------ the push job
-
-    async def push_calendar(self, payload: dict[str, Any]) -> None:
-        """Job handler for `calendar.push`: send a two-way calendar's pending Agenda edits.
-        Queued from the outbox for every event change, or directly with a calendar source id."""
-        source_id = payload.get("calendar_source_id")
-        if source_id is None:
-            aggregate = payload["event"]["aggregate"]
-            async with self.engine.connect() as conn:
-                source_id = await conn.scalar(
-                    select(events.c.calendar_source_id).where(events.c.id == aggregate["id"])
-                )
-        if source_id is None:
-            return  # Agenda's own event: nothing to send
+    async def push_for_event(self, payload: dict[str, Any]) -> None:
+        """Job handler for `calendar.push`: a local write to an event in a two-way calendar."""
+        aggregate = payload["event"]["aggregate"]
         async with self.engine.connect() as conn:
-            row = (
-                (
-                    await conn.execute(
-                        select(
-                            calendar_sources,
-                            external_accounts.c.provider,
-                            external_accounts.c.status.label("account_status"),
-                        )
-                        .join(
-                            external_accounts,
-                            external_accounts.c.id == calendar_sources.c.external_account_id,
-                        )
-                        .where(calendar_sources.c.id == source_id)
-                    )
-                )
-                .mappings()
-                .first()
+            source_id = await conn.scalar(
+                select(calendar_sources.c.id)
+                .join(events, events.c.calendar_source_id == calendar_sources.c.id)
+                .where(events.c.id == aggregate["id"], calendar_sources.c.sync_mode == "two_way")
             )
-            account = (
-                (
-                    await conn.execute(
-                        select(external_accounts).where(external_accounts.c.id == row["external_account_id"])
-                    )
-                )
-                .mappings()
-                .first()
-                if row
-                else None
-            )
-        if row is None or account is None or row["sync_mode"] != "two_way" or not row["enabled"]:
-            return
-        if row["account_status"] == "needs_reauth":
-            raise JobError("needs_reauth", retryable=False)
-        try:
-            client = await self.client(account["provider"])
+        if source_id is not None:
+            await self.sync_calendar({"calendar_source_id": source_id})
 
-            async def token(force: bool = False) -> str:
-                return await self.access_token(account, force=force)
-
-            summary = await push.push_source(self.engine, row, client, CODECS[account["provider"]], token)
-            log.info("pushed %s: %s", source_id, summary)
-        except MissingClient as exc:
-            await self._mark(source_id, "error", "oauth_client_missing")
-            raise JobError("oauth_client_missing", retryable=False) from exc
-        except AuthRevoked as exc:
-            await self._needs_reauth(account["id"])
-            raise JobError("needs_reauth", retryable=False) from exc
-        except ProviderError as exc:
-            if not exc.retryable:
-                await self._mark(source_id, "error", exc.category)
-            raise JobError(exc.category, retryable=exc.retryable, retry_after=exc.retry_after) from exc
-        if summary.written:
-            # read back right after a local write (spec §10): picks up the provider's own changes
-            await self.enqueue_sync(source_id, dedupe=f"after-push:{now_iso()}")
-
-    async def enqueue_push(self, source_id: str, *, dedupe: str) -> str:
-        async with self.engine.begin() as conn:
-            job_id = await queue.enqueue(
-                conn, PUSH_JOB, {"calendar_source_id": source_id}, idempotency_key=f"{source_id}:{dedupe}"
-            )
-        self.wake_worker()
-        return job_id
-
-    async def _mark(self, source_id: str, state: str, error: str | None) -> None:
+    async def _mark(self, source_id: str, state: str, error: str | None, *, synced: bool = False) -> None:
+        values: dict[str, Any] = {"sync_state": state, "last_error": error, "updated_at": now_iso()}
+        if synced:
+            values["last_synced_at"] = now_iso()
         async with self.engine.begin() as conn:
             await conn.execute(
-                update(calendar_sources)
-                .where(calendar_sources.c.id == source_id)
-                .values(sync_state=state, last_error=error, updated_at=now_iso())
+                update(calendar_sources).where(calendar_sources.c.id == source_id).values(**values)
             )
 
     async def _needs_reauth(self, account_id: str) -> None:

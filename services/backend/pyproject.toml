@@ -12,6 +12,7 @@ dependencies = [
     "python-dateutil>=2.9.0.post0",
     "sqlalchemy[asyncio]>=2.1.5",
     "tzdata>=2026.5",
+    "tzlocal>=5.4.4",
     "uvicorn>=0.54.0",
 ]
 
@@ -38,4 +39,3 @@ ignore = ["B008"]  # FastAPI's Depends() in defaults is idiomatic
 
 [tool.ruff.lint.per-file-ignores]
 "migrations/versions/*" = ["E501"]  # long SQL constraint strings from autogenerate
-"tests/test_two_way.py" = ["F401", "F811"]  # reuses the Google suite's fixtures by importing them

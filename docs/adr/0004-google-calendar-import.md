@@ -1,6 +1,6 @@
 # ADR 0004: Google Calendar read-only import
 
-- **Status:** accepted
+- **Status:** accepted; read-only mode and the provider layer extended by [ADR 0005](0005-two-way-sync-and-microsoft.md)
 - **Date:** 2026-10-16
 
 ## Context

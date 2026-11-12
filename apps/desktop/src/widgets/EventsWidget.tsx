@@ -5,6 +5,7 @@ import { api } from "../api/backend";
 import { call, ifMatch, useAction, useLoad } from "../api/call";
 import { defineWidget, type WidgetProps } from "../dashboard/registry";
 import { addDays, describeRule, formatDay, formatTime, localDateOf, localToIso, today, weekdayCode } from "../dates";
+import { PROVIDER_NAMES } from "../providers";
 import { SpaceDot, SpacePicker } from "../state/spaces";
 
 type Scope = "this" | "following" | "all";
@@ -36,6 +37,7 @@ function EventsWidget({ config, spaceIds }: WidgetProps<Config>) {
   const { run, error } = useAction(events.reload);
   const calendars = useLoad(async () => (await call((await api()).GET("/api/v1/calendar-sources"))).data, []);
   const calendarOf = (id: string | null | undefined) => calendars.data?.find((c) => c.id === id);
+  const editable = (calendars.data ?? []).filter((c) => c.enabled && c.sync_mode === "two_way");
 
   const params = (o: Occurrence, scope?: Scope) => ({
     path: { event_id: o.event_id },
@@ -52,7 +54,7 @@ function EventsWidget({ config, spaceIds }: WidgetProps<Config>) {
 
   return (
     <div className="widget-content">
-      <NewEvent spaceIds={spaceIds} calendars={calendars.data ?? []} onDone={events.reload} />
+      <NewEvent spaceIds={spaceIds} calendars={editable} onDone={events.reload} />
       <div className="range">
         <button className="quiet" aria-label="Earlier" onClick={() => setFrom(addDays(from, -config.days))}>
           ←
@@ -92,8 +94,6 @@ function EventsWidget({ config, spaceIds }: WidgetProps<Config>) {
   );
 }
 
-const providerLabel = (c: CalendarSource) => (c.provider === "microsoft" ? "Outlook" : "Google Calendar");
-
 function sortKey(o: Occurrence): string {
   return o.start_at ? new Date(o.start_at).toISOString() : `${o.start_date}T00:00:00.000Z`;
 }
@@ -130,12 +130,17 @@ function EventRow(props: {
               className="chip"
               title={
                 o.read_only
-                  ? `From ${providerLabel(props.calendar)} (read-only); edit it there`
-                  : `Synced both ways with ${providerLabel(props.calendar)}`
+                  ? `From ${PROVIDER_NAMES[props.calendar.provider]}; edit it there`
+                  : `Changes here sync to ${PROVIDER_NAMES[props.calendar.provider]}`
               }
               style={{ color: props.calendar.color }}
             >
               {props.calendar.name}
+            </span>
+          )}
+          {o.sync_conflict && (
+            <span className="overdue" title="Changed here and in its calendar; choose a version under Calendars">
+              Sync conflict
             </span>
           )}
           {o.location && <span>{o.location}</span>}
@@ -150,7 +155,7 @@ function EventRow(props: {
           />
         )}
       </div>
-      {mode === "idle" && !o.read_only && (
+      {mode === "idle" && !o.read_only && !o.sync_conflict && (
         <>
           <button className="quiet" onClick={() => setMode("edit")}>
             Edit
@@ -252,13 +257,11 @@ function NewEvent(props: { spaceIds: string[]; calendars: CalendarSource[]; onDo
   const [frequency, setFrequency] = useState<Frequency>("");
   const { run, error } = useAction(props.onDone);
   const spaceId = props.spaceIds.includes(space) ? space : props.spaceIds[0];
-  // two-way calendars feeding this space can hold the new event too (spec §07)
-  const targets = props.calendars.filter((c) => c.enabled && c.sync_mode === "two_way" && c.space_id === spaceId);
-  const [target, setTarget] = useState("");
-  const calendar = targets.find((c) => c.id === target);
-  const outlook = calendar?.provider === "microsoft"; // Outlook series are edited in Outlook
+  const [calendar, setCalendar] = useState("");
+  const calendars = props.calendars.filter((c) => c.space_id === spaceId);
+  const calendarId = calendars.some((c) => c.id === calendar) ? calendar : "";
 
-  const rrule = !frequency || outlook ? null : frequency === "WEEKLY" ? `FREQ=WEEKLY;BYDAY=${weekdayCode(day)}` : `FREQ=${frequency}`;
+  const rrule = !frequency ? null : frequency === "WEEKLY" ? `FREQ=WEEKLY;BYDAY=${weekdayCode(day)}` : `FREQ=${frequency}`;
   const timing = allDay
     ? { all_day: true, start_date: day, end_date: addDays(day, 1) }
     : { start_at: localToIso(day, start), end_at: localToIso(day, end) };
@@ -274,7 +277,7 @@ function NewEvent(props: { spaceIds: string[]; calendars: CalendarSource[]; onDo
           await call(
             (await api()).POST("/api/v1/spaces/{space_id}/events", {
               params: { path: { space_id: spaceId } },
-              body: { title, location, rrule, ...timing, calendar_source_id: calendar?.id ?? null },
+              body: { title, location, rrule, calendar_source_id: calendarId || null, ...timing },
             }),
           );
           setTitle("");
@@ -296,6 +299,19 @@ function NewEvent(props: { spaceIds: string[]; calendars: CalendarSource[]; onDo
       {open && (
         <div className="form-grid wide">
           <SpacePicker spaceIds={props.spaceIds} value={spaceId} onChange={setSpace} />
+          {calendars.length > 0 && (
+            <label>
+              Calendar
+              <select value={calendarId} onChange={(e) => setCalendar(e.target.value)}>
+                <option value="">Agenda only</option>
+                {calendars.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} ({PROVIDER_NAMES[c.provider]})
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <label>
             Date
             <input type="date" value={day} onChange={(e) => setDay(e.target.value)} />
@@ -315,27 +331,9 @@ function NewEvent(props: { spaceIds: string[]; calendars: CalendarSource[]; onDo
               </label>
             </>
           )}
-          {targets.length > 0 && (
-            <label>
-              Calendar
-              <select value={calendar?.id ?? ""} onChange={(e) => setTarget(e.target.value)}>
-                <option value="">Agenda only</option>
-                {targets.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} ({providerLabel(c)})
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
           <label>
             Repeats
-            <select
-              value={outlook ? "" : frequency}
-              disabled={outlook}
-              title={outlook ? "Create repeating Outlook events in Outlook" : undefined}
-              onChange={(e) => setFrequency(e.target.value as Frequency)}
-            >
+            <select value={frequency} onChange={(e) => setFrequency(e.target.value as Frequency)}>
               <option value="">Doesn't repeat</option>
               <option value="DAILY">Daily</option>
               <option value="WEEKLY">Weekly on {weekdayCode(day)}</option>

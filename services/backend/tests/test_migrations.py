@@ -71,3 +71,36 @@ def test_upgrade_keeps_existing_events(settings):
     with sqlite3.connect(settings.db_path) as conn:
         row = conn.execute("SELECT title, calendar_source_id FROM events WHERE id = 'e'").fetchone()
     assert row == ("Birthday", None)
+
+
+def test_upgrade_keeps_imported_mappings(settings):
+    """0005 adds synced_snapshot; mappings imported before it have no baseline yet."""
+    settings.data_dir.mkdir(parents=True)
+    cfg = alembic_config(settings.db_path)
+    command.upgrade(cfg, "0004")
+    with sqlite3.connect(settings.db_path) as conn:
+        conn.execute("INSERT INTO users VALUES ('u', 'Pete', 'UTC', NULL, 'x', 'x')")
+        conn.execute(
+            "INSERT INTO spaces (id, owner_user_id, name, type, color, created_at, updated_at)"
+            " VALUES ('s', 'u', 'Home', 'custom', '#000000', 'x', 'x')"
+        )
+        conn.execute(
+            "INSERT INTO external_accounts (id, user_id, provider, provider_subject, email,"
+            " granted_scopes, credential_ref, created_at, updated_at)"
+            " VALUES ('a', 'u', 'google', 'sub', 'e', '', 'r', 'x', 'x')"
+        )
+        conn.execute(
+            "INSERT INTO calendar_sources (id, external_account_id, provider_calendar_id, name, color,"
+            " timezone, access_role, created_at, updated_at)"
+            " VALUES ('c', 'a', 'cal', 'Cal', '#000', 'UTC', 'owner', 'x', 'x')"
+        )
+        conn.execute(
+            "INSERT INTO events (id, space_id, title, start_date, end_date, timezone,"
+            " calendar_source_id, created_at, updated_at)"
+            " VALUES ('e', 's', 'Trip', '2026-10-20', '2026-10-21', 'UTC', 'c', 'x', 'x')"
+        )
+        conn.execute("INSERT INTO event_mappings VALUES ('e', 'c', 'g1', '\"etag\"', 1)")
+    migrate(settings.db_path, settings.backups_dir)
+    with sqlite3.connect(settings.db_path) as conn:
+        row = conn.execute("SELECT provider_event_id, etag, synced_snapshot FROM event_mappings").fetchone()
+    assert row == ("g1", '"etag"', None)

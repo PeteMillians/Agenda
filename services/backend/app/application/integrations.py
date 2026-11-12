@@ -1,12 +1,13 @@
-"""Provider accounts, calendar sources, and sync conflicts (spec §07, §10). Google and Microsoft."""
+"""Provider accounts and calendar sources (spec §07, §10): Google and Microsoft."""
 
 from __future__ import annotations
 
 import contextlib
 import json
+import re
 from typing import Any
 
-from sqlalchemy import delete, func, insert, select, update
+from sqlalchemy import delete, insert, select, update
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncConnection
 
@@ -23,107 +24,112 @@ from app.db.tables import (
 from app.domain.clock import new_id, now_iso
 from app.domain.errors import Conflict, Invalid, NotFound, Unavailable
 from app.domain.policy import Action
-from app.integrations.base import WRITABLE_ROLES, Grant, ProviderClient, ProviderError, Unsupported
-from app.integrations.conflicts import local_snapshot
-from app.integrations.providers import CODECS, LABELS
-from app.integrations.runtime import CLIENT_SETTINGS, Integrations, MissingClient
-from app.integrations.sync import apply_changes
+from app.integrations.errors import ProviderError
+from app.integrations.model import CalendarProvider, Grant
+from app.integrations.runtime import Integrations, MissingClient, can_write, client_setting
+from app.integrations.state import load_state
+from app.integrations.sync import baseline
 from app.integrations.vault import VaultUnavailable
-from app.schemas.integrations import CalendarSourcePatch, MicrosoftClientIn, OAuthClientIn
+from app.schemas.integrations import CalendarSourcePatch, OAuthClientIn, Provider
 
-CALLBACK_PATHS = {
-    "google": "/api/v1/integrations/google/callback",
-    "microsoft": "/api/v1/integrations/microsoft/callback",
+NAMES = {"google": "Google", "microsoft": "Microsoft"}
+CLIENT_ID = {
+    "google": re.compile(r"^[\w.-]+\.apps\.googleusercontent\.com$"),
+    "microsoft": re.compile(r"^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$"),
 }
-GOOGLE_CALLBACK_PATH = CALLBACK_PATHS["google"]
-# Entra ignores the port only for `localhost` redirect URIs, so Microsoft gets that host (ADR 0005)
-CALLBACK_HOSTS = {"google": "127.0.0.1", "microsoft": "localhost"}
+WRITABLE_ROLES = ("owner", "writer")
 
 
-def redirect_uri(provider: str, port: int | str | None) -> str:
-    host = CALLBACK_HOSTS[provider] + (f":{port}" if port is not None else "")
-    return f"http://{host}{CALLBACK_PATHS[provider]}"
+CALLBACK_PATH = "/api/v1/integrations/{provider}/callback"
+
+
+def callback_url(provider: Provider, port: int) -> str:
+    """Google accepts any loopback address for a desktop client; Microsoft matches the registered
+    redirect URI, which for loopback must be `http://localhost` (the port is ignored)."""
+    host = "localhost" if provider == "microsoft" else "127.0.0.1"
+    return f"http://{host}:{port}{CALLBACK_PATH.format(provider=provider)}"
 
 
 # --------------------------------------------------------------------------- OAuth client config
 
 
-async def client_status(ctx: Ctx, integrations: Integrations, provider: str = "google") -> dict[str, Any]:
+async def client_status(ctx: Ctx, integrations: Integrations, provider: Provider) -> dict[str, Any]:
     async with ctx.read() as conn:
         raw = await conn.scalar(
-            select(app_settings.c.value).where(app_settings.c.key == CLIENT_SETTINGS[provider])
+            select(app_settings.c.value).where(app_settings.c.key == client_setting(provider))
         )
-    config = json.loads(raw) if raw else {}
     return {
         "configured": raw is not None,
-        "client_id": config.get("client_id"),
-        "tenant": config.get("tenant") if provider == "microsoft" else None,
+        "client_id": json.loads(raw)["client_id"] if raw else None,
         "vault": integrations.vault.description if integrations.vault else None,
-        # what the owner registers: Microsoft matches localhost redirects on any port
-        "redirect_uri": redirect_uri(provider, None if provider == "microsoft" else "<port>"),
+        # what to register in Azure: Microsoft ignores the port of a localhost redirect
+        "redirect_uri": f"http://localhost{CALLBACK_PATH.format(provider=provider)}"
+        if provider == "microsoft"
+        else None,
     }
 
 
-async def _save_client(ctx: Ctx, provider: str, value: dict[str, Any]) -> None:
-    key = CLIENT_SETTINGS[provider]
-    async with ctx.write() as conn:
-        await conn.execute(delete(app_settings).where(app_settings.c.key == key))
-        await conn.execute(
-            insert(app_settings).values(key=key, value=json.dumps(value), updated_at=now_iso())
-        )
-
-
-async def set_client(ctx: Ctx, integrations: Integrations, data: OAuthClientIn) -> dict[str, Any]:
-    await _save_client(ctx, "google", {"client_id": data.client_id, "client_secret": data.client_secret})
-    return await client_status(ctx, integrations, "google")
-
-
-async def set_microsoft_client(
-    ctx: Ctx, integrations: Integrations, data: MicrosoftClientIn
+async def set_client(
+    ctx: Ctx, integrations: Integrations, provider: Provider, data: OAuthClientIn
 ) -> dict[str, Any]:
-    await _save_client(ctx, "microsoft", {"client_id": data.client_id, "tenant": data.tenant})
-    return await client_status(ctx, integrations, "microsoft")
+    if not CLIENT_ID[provider].match(data.client_id):
+        hint = "…apps.googleusercontent.com" if provider == "google" else "a GUID like 00000000-0000-…"
+        raise Invalid(
+            f"That doesn't look like a {NAMES[provider]} client ID ({hint}).", code="INVALID_CLIENT_ID"
+        )
+    config: dict[str, str] = {"client_id": data.client_id}
+    if provider == "google":
+        if not data.client_secret:
+            raise Invalid("Google desktop clients also need their client secret.", code="INVALID_CLIENT_ID")
+        config["client_secret"] = data.client_secret
+    async with ctx.write() as conn:
+        await conn.execute(delete(app_settings).where(app_settings.c.key == client_setting(provider)))
+        await conn.execute(
+            insert(app_settings).values(
+                key=client_setting(provider), value=json.dumps(config), updated_at=now_iso()
+            )
+        )
+    return await client_status(ctx, integrations, provider)
 
 
 # --------------------------------------------------------------------------- sign-in
 
 
-async def _client(integrations: Integrations, provider: str) -> ProviderClient:
+async def _provider(integrations: Integrations, provider: str) -> CalendarProvider:
     try:
-        return await integrations.client(provider)
+        return await integrations.provider(provider)
     except MissingClient:
         raise Conflict(
-            f"Add your {LABELS[provider]} app registration first.", code="OAUTH_CLIENT_MISSING"
+            f"Add your {NAMES[provider]} OAuth client first.", code="OAUTH_CLIENT_MISSING"
         ) from None
 
 
-async def start(ctx: Ctx, integrations: Integrations, provider: str, port: int, *, write: bool) -> str:
+async def start_connect(
+    ctx: Ctx, integrations: Integrations, provider: Provider, port: int, *, write: bool
+) -> str:
+    """`write` asks for event write access too, which two-way sync needs (spec §10)."""
     if integrations.vault is None:
         raise Unavailable(
             "No credential vault is available, so accounts cannot be connected.", code="VAULT_UNAVAILABLE"
         )
-    client = await _client(integrations, provider)
-    uri = redirect_uri(provider, port)
-    state, challenge = integrations.pending.start(provider, uri)
-    return client.authorization_url(uri, state, challenge, write=write)
+    client = await _provider(integrations, provider)
+    redirect_uri = callback_url(provider, port)
+    state, challenge = integrations.pending.start(provider, redirect_uri)
+    return client.authorization_url(redirect_uri, state, challenge, write=write)
 
 
-async def start_google(ctx: Ctx, integrations: Integrations, port: int) -> str:
-    return await start(ctx, integrations, "google", port, write=False)
-
-
-async def complete(integrations: Integrations, provider: str, state: str, code: str) -> str:
+async def complete_connect(integrations: Integrations, provider: Provider, state: str, code: str) -> str:
     """The browser's loopback redirect. Exempt from the bearer secret, so it is accepted only with a
     one-time state this process issued. Returns the connected email."""
     pending = integrations.pending.take(state)
     if pending is None or pending.provider != provider:
         raise Invalid("This sign-in link expired or was already used. Start again from Agenda.")
-    client = await _client(integrations, provider)
+    client = await _provider(integrations, provider)
     grant = await client.exchange_code(code, pending.verifier, pending.redirect_uri)
     if not grant.refresh_token or not grant.subject:
         raise Invalid(
-            f"{LABELS[provider]} did not grant offline access. Remove Agenda's access in your account,"
-            " then try again."
+            f"{NAMES[provider]} did not grant offline access. Remove Agenda's access in your account"
+            " settings, then try again."
         )
     assert integrations.vault is not None
     async with integrations.engine.begin() as conn:
@@ -186,11 +192,7 @@ async def complete(integrations: Integrations, provider: str, state: str, code: 
         integrations.remember(account_id, grant)
     await refresh_calendars_for(integrations, account_id, grant)
     await integrations.enqueue_due(force=True)  # reconnecting resumes enabled calendars right away
-    return grant.email or f"your {LABELS[provider]} account"
-
-
-async def complete_google(integrations: Integrations, state: str, code: str) -> str:
-    return await complete(integrations, "google", state, code)
+    return grant.email or f"your {NAMES[provider]} account"
 
 
 async def refresh_calendars_for(
@@ -204,52 +206,46 @@ async def refresh_calendars_for(
             .mappings()
             .one()
         )
-        owner_tz = await conn.scalar(select(users.c.timezone).where(users.c.id == account["user_id"]))
-    client = await integrations.client(account["provider"])
+    client = await integrations.provider(account["provider"])
     token = grant.access_token if grant else await integrations.access_token(account)
     calendars = await client.list_calendars(token)
     stamp = now_iso()
     async with integrations.engine.begin() as conn:
         known = {
-            r.provider_calendar_id: (r.id, r.sync_mode)
+            r.provider_calendar_id: r.id
             for r in await conn.execute(
-                select(
-                    calendar_sources.c.id,
-                    calendar_sources.c.provider_calendar_id,
-                    calendar_sources.c.sync_mode,
-                ).where(calendar_sources.c.external_account_id == account_id)
+                select(calendar_sources.c.id, calendar_sources.c.provider_calendar_id).where(
+                    calendar_sources.c.external_account_id == account_id
+                )
             )
         }
         for cal in calendars:
-            values: dict[str, Any] = {
+            values = {
                 "name": cal.name,
                 "color": cal.color,
-                "timezone": cal.timezone or owner_tz or "UTC",
+                "timezone": cal.timezone,
                 "access_role": cal.access_role,
                 "is_primary": cal.is_primary,
             }
-            if cal.provider_calendar_id in known:
-                source_id, mode = known.pop(cal.provider_calendar_id)
-                if mode == "two_way" and cal.access_role not in WRITABLE_ROLES:
-                    values["sync_mode"] = "read_only"  # write access was taken away at the provider
+            if cal.provider_id in known:
                 await conn.execute(
-                    update(calendar_sources).where(calendar_sources.c.id == source_id).values(**values)
+                    update(calendar_sources)
+                    .where(calendar_sources.c.id == known.pop(cal.provider_id))
+                    .values(**values)
                 )
             else:
                 await conn.execute(
                     insert(calendar_sources).values(
                         id=new_id(),
                         external_account_id=account_id,
-                        provider_calendar_id=cal.provider_calendar_id,
+                        provider_calendar_id=cal.provider_id,
                         created_at=stamp,
                         updated_at=stamp,
                         **values,
                     )
                 )
         if known:
-            await conn.execute(
-                delete(calendar_sources).where(calendar_sources.c.id.in_([sid for sid, _ in known.values()]))
-            )
+            await conn.execute(delete(calendar_sources).where(calendar_sources.c.id.in_(known.values())))
 
 
 # --------------------------------------------------------------------------- accounts
@@ -272,15 +268,8 @@ async def _own_account(conn: AsyncConnection, ctx: Ctx, account_id: str) -> RowM
     return row
 
 
-def _can_write(provider: str, scopes: list[str]) -> bool:
-    if provider == "microsoft":
-        return any(s.lower().endswith("calendars.readwrite") for s in scopes)
-    return any(s.endswith(("/auth/calendar.events", "/auth/calendar")) for s in scopes)
-
-
 def _account_out(row: RowMapping) -> dict[str, Any]:
-    scopes = row["granted_scopes"].split()
-    return {**row, "granted_scopes": scopes, "can_write": _can_write(row["provider"], scopes)}
+    return {**row, "granted_scopes": row["granted_scopes"].split()}
 
 
 async def list_accounts(ctx: Ctx) -> list[dict[str, Any]]:
@@ -300,20 +289,20 @@ async def refresh_calendars(ctx: Ctx, integrations: Integrations, account_id: st
         await refresh_calendars_for(integrations, account_id)
     except ProviderError as exc:
         raise Unavailable(
-            f"{LABELS[account['provider']]} could not be reached ({exc.category}).",
+            f"{NAMES[account['provider']]} could not be reached ({exc.category}).",
             code="PROVIDER_UNAVAILABLE",
         ) from exc
 
 
 async def disconnect(ctx: Ctx, integrations: Integrations, account_id: str, *, keep_events: bool) -> None:
-    """Revoke at the provider (where it can be), remove the vault entry, and keep the imported events
-    as Agenda's own (editable) events or delete them."""
+    """Revoke at the provider, remove the vault entry, and keep the imported events as Agenda's own
+    (editable) events or delete them. Changes not pushed yet stay only in Agenda."""
     async with ctx.read() as conn:
         account = await _own_account(conn, ctx, account_id)
     refresh = integrations.vault.get(account["credential_ref"]) if integrations.vault else None
     if refresh:
-        with contextlib.suppress(MissingClient, ProviderError):
-            await (await integrations.client(account["provider"])).revoke(refresh)
+        with contextlib.suppress(MissingClient):
+            await (await integrations.provider(account["provider"])).revoke(refresh)
     if integrations.vault:
         integrations.vault.delete(account["credential_ref"])
     integrations.forget(account_id)
@@ -326,7 +315,7 @@ async def disconnect(ctx: Ctx, integrations: Integrations, account_id: str, *, k
             await conn.execute(
                 update(events)
                 .where(events.c.calendar_source_id.in_(source_ids))
-                .values(calendar_source_id=None, needs_push=False)
+                .values(calendar_source_id=None)
             )
         await conn.execute(delete(external_accounts).where(external_accounts.c.id == account_id))
         await audit(conn, ctx, "account.disconnected", "external_account", account_id, None)
@@ -335,26 +324,21 @@ async def disconnect(ctx: Ctx, integrations: Integrations, account_id: str, *, k
 # --------------------------------------------------------------------------- calendar sources
 
 
-_PENDING = (
-    select(func.count())
-    .where(events.c.calendar_source_id == calendar_sources.c.id, events.c.needs_push.is_(True))
-    .correlate(calendar_sources)
-    .scalar_subquery()
-)
-_CONFLICTS = (
-    select(func.count())
-    .where(sync_conflicts.c.calendar_source_id == calendar_sources.c.id, sync_conflicts.c.status == "open")
-    .correlate(calendar_sources)
-    .scalar_subquery()
-)
 _SOURCE_QUERY = select(
     calendar_sources,
     external_accounts.c.email.label("account_email"),
     external_accounts.c.provider,
     external_accounts.c.granted_scopes,
-    _PENDING.label("pending_changes"),
-    _CONFLICTS.label("open_conflicts"),
 ).join(external_accounts, external_accounts.c.id == calendar_sources.c.external_account_id)
+
+
+async def _source_out(conn: AsyncConnection, row: RowMapping) -> dict[str, Any]:
+    out = dict(row)
+    out["can_write"] = can_write(row["provider"], out.pop("granted_scopes").split())
+    state = await load_state(conn, row["id"])
+    out["pending_changes"] = state.pending() if row["sync_mode"] == "two_way" else 0
+    out["open_conflicts"] = len(state.conflicts)
+    return out
 
 
 async def list_sources(ctx: Ctx) -> list[dict[str, Any]]:
@@ -364,7 +348,7 @@ async def list_sources(ctx: Ctx) -> list[dict[str, Any]]:
                 external_accounts.c.email, calendar_sources.c.is_primary.desc(), calendar_sources.c.name
             )
         )
-        return [dict(r) for r in rows.mappings()]
+        return [await _source_out(conn, r) for r in rows.mappings()]
 
 
 async def _own_source(conn: AsyncConnection, ctx: Ctx, source_id: str) -> RowMapping:
@@ -384,12 +368,31 @@ async def _own_source(conn: AsyncConnection, ctx: Ctx, source_id: str) -> RowMap
     return row
 
 
-def _unsent(source: RowMapping) -> Conflict:
-    label = LABELS[source["provider"]]
-    return Conflict(
-        f"{source['pending_changes']} change(s) haven't reached {label} yet and"
-        f" {source['open_conflicts']} conflict(s) are open. Sync and resolve them first.",
-        code="PENDING_CHANGES",
+async def _discard_local_changes(conn: AsyncConnection, source_id: str) -> None:
+    """Leaving two-way sync: whatever was not pushed is dropped, and a full sync restores the
+    provider's version of everything (the UI warns first)."""
+    state = await load_state(conn, source_id)
+    unpushed = [
+        event_id
+        for event_id, row in state.rows.items()
+        if event_id not in state.mappings and not (row["series_id"] and row["status"] == "cancelled")
+    ]
+    if unpushed:
+        await conn.execute(delete(events).where(events.c.id.in_(unpushed)))
+    await conn.execute(
+        update(events)
+        .where(events.c.calendar_source_id == source_id, events.c.deleted_at.is_not(None))
+        .values(deleted_at=None)
+    )
+    await conn.execute(
+        update(event_mappings)
+        .where(event_mappings.c.calendar_source_id == source_id)
+        .values(etag=None, synced_snapshot=None)
+    )
+    await conn.execute(
+        update(sync_conflicts)
+        .where(sync_conflicts.c.calendar_source_id == source_id, sync_conflicts.c.status == "open")
+        .values(status="superseded")
     )
 
 
@@ -411,21 +414,20 @@ async def update_source(
             raise Invalid("Choose a space for this calendar first.", code="SPACE_REQUIRED")
         values["enabled"] = enabled
         mode = data.sync_mode if "sync_mode" in sent and data.sync_mode else source["sync_mode"]
-        if not enabled:
-            mode = "read_only"
-        unsent = source["pending_changes"] or source["open_conflicts"]
-        if source["sync_mode"] == "two_way" and mode == "read_only" and unsent:
-            raise _unsent(source)  # read-only would let the next sync overwrite them
         if mode == "two_way" and source["sync_mode"] != "two_way":
-            label = LABELS[source["provider"]]
             if source["access_role"] not in WRITABLE_ROLES:
-                raise Conflict(f"{label} only lets you read this calendar.", code="READ_ONLY_CALENDAR")
-            if not _can_write(source["provider"], source["granted_scopes"].split()):
                 raise Conflict(
-                    f"Agenda needs permission to change {label} events. Grant write access, then try again.",
-                    {"provider": source["provider"], "external_account_id": source["external_account_id"]},
+                    "You can only view this calendar, so it can't be edited here.", code="CALENDAR_READ_ONLY"
+                )
+            if not can_write(source["provider"], source["granted_scopes"].split()):
+                raise Conflict(
+                    f"Allow Agenda to edit your {NAMES[source['provider']]} events first.",
                     code="WRITE_ACCESS_REQUIRED",
                 )
+            await baseline(conn, source_id)  # everything imported so far is in step
+        elif mode == "read_only" and source["sync_mode"] == "two_way":
+            await _discard_local_changes(conn, source_id)
+            values["sync_cursor"] = None
         values["sync_mode"] = mode
         if not enabled and source["enabled"]:
             # turning import off drops the copies; the next enable starts with a full sync
@@ -438,9 +440,12 @@ async def update_source(
             )
         await update_revisioned(conn, calendar_sources, source_id, expected, values)
         row = await _own_source(conn, ctx, source_id)
-    if row["enabled"] and (not source["enabled"] or row["last_synced_at"] is None):
-        await integrations.enqueue_sync(source_id, dedupe=f"enable:{row['revision']}")
-    return dict(row)
+        out = await _source_out(conn, row)
+    if row["enabled"] and (
+        not source["enabled"] or row["last_synced_at"] is None or row["sync_mode"] != source["sync_mode"]
+    ):
+        await integrations.enqueue_sync(source_id, dedupe=f"change:{row['revision']}")
+    return out
 
 
 async def sync_now(ctx: Ctx, integrations: Integrations, source_id: str) -> str:
@@ -448,182 +453,4 @@ async def sync_now(ctx: Ctx, integrations: Integrations, source_id: str) -> str:
         source = await _own_source(conn, ctx, source_id)
     if not source["enabled"]:
         raise Conflict("Turn this calendar on before syncing it.", code="CALENDAR_DISABLED")
-    if source["sync_mode"] == "two_way" and source["pending_changes"]:
-        await integrations.enqueue_push(source_id, dedupe=f"manual:{now_iso()}")
     return await integrations.enqueue_sync(source_id, dedupe=f"manual:{now_iso()}")
-
-
-# --------------------------------------------------------------------------- conflicts
-
-
-def _version(snapshot: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "title": snapshot["title"],
-        "description": snapshot.get("description", ""),
-        "location": snapshot.get("location", ""),
-        "all_day": snapshot.get("start_date") is not None,
-        "start_at": snapshot.get("start_at"),
-        "end_at": snapshot.get("end_at"),
-        "start_date": snapshot.get("start_date"),
-        "end_date": snapshot.get("end_date"),
-        "timezone": snapshot["timezone"],
-        "rrule": snapshot.get("rrule"),
-        "deleted": snapshot.get("deleted", False),
-    }
-
-
-def _remote_version(provider: str, raw: str | None, timezone: str) -> dict[str, Any] | None:
-    if raw is None:
-        return None
-    try:
-        incoming = CODECS[provider].parse(json.loads(raw), timezone)
-    except (Unsupported, KeyError, ValueError):
-        return None
-    if incoming.cancelled:
-        return None
-    return _version({**incoming.content, **(incoming.timing or {}), "rrule": incoming.rrule})
-
-
-_CONFLICT_QUERY = (
-    select(
-        sync_conflicts,
-        calendar_sources.c.name.label("calendar_name"),
-        calendar_sources.c.timezone.label("calendar_timezone"),
-        external_accounts.c.provider,
-    )
-    .join(calendar_sources, calendar_sources.c.id == sync_conflicts.c.calendar_source_id)
-    .join(external_accounts, external_accounts.c.id == calendar_sources.c.external_account_id)
-)
-
-
-async def list_conflicts(ctx: Ctx) -> list[dict[str, Any]]:
-    async with ctx.read() as conn:
-        rows = list(
-            (
-                await conn.execute(
-                    _CONFLICT_QUERY.where(
-                        external_accounts.c.user_id == ctx.user_id, sync_conflicts.c.status == "open"
-                    ).order_by(sync_conflicts.c.detected_at)
-                )
-            ).mappings()
-        )
-        found = []
-        for row in rows:
-            event = (
-                (await conn.execute(select(events).where(events.c.id == row["event_id"]))).mappings().one()
-            )
-            remote = _remote_version(row["provider"], row["remote_snapshot"], row["calendar_timezone"])
-            local = local_snapshot(event)  # as it is now, not as it was when detected
-            found.append(
-                {
-                    **row,
-                    "local": _version(local),
-                    "remote": remote,
-                    "can_keep_both": _can_keep_both(event, remote),
-                }
-            )
-        return found
-
-
-def _can_keep_both(event: RowMapping, remote: dict[str, Any] | None) -> bool:
-    """Two independent single events; a series or a deletion has no meaningful second copy."""
-    return (
-        remote is not None
-        and event["deleted_at"] is None
-        and event["rrule"] is None
-        and event["series_id"] is None
-    )
-
-
-async def resolve_conflict(ctx: Ctx, integrations: Integrations, conflict_id: str, resolution: str) -> None:
-    """keep_local re-sends Agenda's version over the provider's current one; keep_remote applies the
-    provider's version; keep_both keeps Agenda's version as a new, separate event and applies the
-    provider's to the original. Then the push job reconciles the provider (spec §10)."""
-    async with ctx.write() as conn:
-        conflict = (
-            (
-                await conn.execute(
-                    _CONFLICT_QUERY.where(
-                        sync_conflicts.c.id == conflict_id, external_accounts.c.user_id == ctx.user_id
-                    )
-                )
-            )
-            .mappings()
-            .first()
-        )
-        if conflict is None:
-            raise NotFound("Conflict")
-        if conflict["status"] != "open":
-            raise Conflict("This conflict was already resolved.", code="CONFLICT_RESOLVED")
-        event = (
-            (await conn.execute(select(events).where(events.c.id == conflict["event_id"]))).mappings().one()
-        )
-        source = (
-            (
-                await conn.execute(
-                    select(calendar_sources).where(calendar_sources.c.id == conflict["calendar_source_id"])
-                )
-            )
-            .mappings()
-            .one()
-        )
-        remote = json.loads(conflict["remote_snapshot"]) if conflict["remote_snapshot"] else None
-        if resolution == "keep_both" and not _can_keep_both(
-            event, _remote_version(conflict["provider"], conflict["remote_snapshot"], source["timezone"])
-        ):
-            raise Invalid(
-                "Keep both works for single events that still exist on both sides.", code="CANNOT_KEEP_BOTH"
-            )
-        await conn.execute(
-            update(sync_conflicts)
-            .where(sync_conflicts.c.id == conflict_id)
-            .values(status="resolved", resolution=resolution, resolved_at=now_iso())
-        )
-        if resolution == "keep_local":
-            if remote is None:  # deleted there: send ours as a new provider event
-                await conn.execute(delete(event_mappings).where(event_mappings.c.event_id == event["id"]))
-            else:  # overwrite their current version, which we now know
-                await conn.execute(
-                    update(event_mappings)
-                    .where(event_mappings.c.event_id == event["id"])
-                    .values(etag=conflict["remote_version"], last_synced_revision=0)
-                )
-            await conn.execute(update(events).where(events.c.id == event["id"]).values(needs_push=True))
-        else:
-            if resolution == "keep_both":
-                await _copy_as_new(conn, event)
-            await _take_remote(conn, source, event, remote, conflict["provider"])
-        await audit(conn, ctx, f"conflict.{resolution}", "event", event["id"], event["space_id"])
-    await integrations.enqueue_push(source["id"], dedupe=f"resolve:{conflict_id}")
-
-
-async def _copy_as_new(conn: AsyncConnection, event: RowMapping) -> None:
-    """Agenda's version becomes its own event; the push job creates it at the provider."""
-    stamp = now_iso()
-    values = {
-        k: v
-        for k, v in event.items()
-        if k not in ("id", "revision", "created_at", "updated_at", "needs_push")
-    }
-    values["title"] = f"{event['title']} (Agenda copy)"[:200]
-    await conn.execute(
-        insert(events).values(id=new_id(), **values, needs_push=True, created_at=stamp, updated_at=stamp)
-    )
-
-
-async def _take_remote(
-    conn: AsyncConnection, source: RowMapping, event: RowMapping, remote: dict[str, Any] | None, provider: str
-) -> None:
-    """Discard Agenda's unsent edits to `event` and apply the provider's version."""
-    series = (events.c.id == event["id"]) | (events.c.series_id == event["id"])
-    await conn.execute(update(events).where(series).values(needs_push=False))
-    if remote is None:  # deleted there: delete here too
-        await conn.execute(delete(events).where(events.c.id == event["id"]))
-        return
-    if event["deleted_at"] is not None:  # deleted here, changed there: bring it back
-        await conn.execute(update(events).where(series).values(deleted_at=None))
-    # forget the stored ETag so the provider's copy is applied, not skipped as unchanged
-    await conn.execute(
-        update(event_mappings).where(event_mappings.c.event_id == event["id"]).values(etag=None)
-    )
-    await apply_changes(conn, source, [remote], CODECS[provider], full=False)
