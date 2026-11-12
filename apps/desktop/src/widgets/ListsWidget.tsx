@@ -96,6 +96,7 @@ function Items({ listId }: { listId: string }) {
   );
   const [text, setText] = useState("");
   const [renaming, setRenaming] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const [name, setName] = useState("");
   const { run, error } = useAction(detail.reload);
   const items = detail.data?.items ?? [];
@@ -135,27 +136,39 @@ function Items({ listId }: { listId: string }) {
         ) : (
           <strong className="grow">{list?.name}</strong>
         )}
-        {list && !renaming && (
-          <>
-            <button className="quiet" onClick={() => (setName(list.name), setRenaming(true))}>
-              Rename
-            </button>
-            <button
-              className="quiet"
-              onClick={() =>
-                run(async () =>
-                  call(
-                    (await api()).DELETE("/api/v1/lists/{list_id}", {
-                      params: { path: { list_id: listId }, header: ifMatch(list.revision) },
-                    }),
-                  ),
-                )
-              }
-            >
-              Archive list
-            </button>
-          </>
-        )}
+        {list &&
+          !renaming &&
+          (confirming ? (
+            <span className="scope">
+              This list and its items will be removed from Agenda.
+              <button
+                onClick={() => {
+                  setConfirming(false);
+                  void run(async () =>
+                    call(
+                      (await api()).DELETE("/api/v1/lists/{list_id}", {
+                        params: { path: { list_id: listId }, header: ifMatch(list.revision) },
+                      }),
+                    ),
+                  );
+                }}
+              >
+                Archive
+              </button>
+              <button className="quiet" onClick={() => setConfirming(false)}>
+                Cancel
+              </button>
+            </span>
+          ) : (
+            <>
+              <button className="quiet" onClick={() => (setName(list.name), setConfirming(false), setRenaming(true))}>
+                Rename
+              </button>
+              <button className="quiet" onClick={() => setConfirming(true)}>
+                Archive list
+              </button>
+            </>
+          ))}
       </div>
       <form
         onSubmit={(e) => {
