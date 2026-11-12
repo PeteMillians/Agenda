@@ -15,7 +15,7 @@ than keep them as "manage" views.
 - **Everything happens in widgets.** Built-in widgets have full editing:
   - `agenda.upcoming-events`: create; edit title, place, and time; delete with this / following / all.
   - `agenda.tasks-and-chores`: create, complete, edit due date, assignee, repeat, and notes; archive.
-  - `agenda.lists`: create and rename lists; add, tick, and clear items.
+  - `agenda.lists`: create and rename lists; add, edit, tick, and clear items.
   - `agenda.people`: add, rename, and remove people. This widget is not in the spec; it exists
     because the People tab went away.
 
