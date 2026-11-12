@@ -29,7 +29,7 @@ from app.application.context import (
     require_space,
     update_revisioned,
 )
-from app.db.tables import events
+from app.db.tables import calendar_sources, events, external_accounts
 from app.domain import recurrence
 from app.domain.clock import iso, new_id, now_iso
 from app.domain.errors import Conflict, Invalid, NotFound
@@ -205,6 +205,7 @@ def _occurrence(
     *,
     key: str | None,
     is_exception: bool,
+    writable: set[str],
 ) -> dict[str, Any]:
     return {
         "event_id": master["id"],
@@ -218,8 +219,18 @@ def _occurrence(
         "timezone": content["timezone"],
         "rrule": master["rrule"],
         "calendar_source_id": master["calendar_source_id"],
-        "read_only": master["calendar_source_id"] is not None,
+        "read_only": master["calendar_source_id"] is not None
+        and master["calendar_source_id"] not in writable,
     }
+
+
+async def _two_way_sources(conn: AsyncConnection) -> set[str]:
+    rows = await conn.execute(
+        select(calendar_sources.c.id).where(
+            calendar_sources.c.sync_mode == "two_way", calendar_sources.c.enabled.is_(True)
+        )
+    )
+    return {r.id for r in rows}
 
 
 # --------------------------------------------------------------------------- queries
@@ -255,9 +266,10 @@ async def list_occurrences(ctx: Ctx, space_id: str, start: date, end: date) -> l
                 )
             )
         ).mappings()
+        writable = await _two_way_sources(conn)
 
     found = [
-        (Timing.of(r), _occurrence(r, r, Timing.of(r), key=None, is_exception=False))
+        (Timing.of(r), _occurrence(r, r, Timing.of(r), key=None, is_exception=False, writable=writable))
         for r in singles.mappings()
     ]
     by_series: dict[str, dict[str, RowMapping]] = {}
@@ -275,12 +287,19 @@ async def list_occurrences(ctx: Ctx, space_id: str, start: date, end: date) -> l
             timing = first.starting(occurrence_start)
             if timing.key not in overrides:
                 found.append(
-                    (timing, _occurrence(master, master, timing, key=timing.key, is_exception=False))
+                    (
+                        timing,
+                        _occurrence(
+                            master, master, timing, key=timing.key, is_exception=False, writable=writable
+                        ),
+                    )
                 )
         for key, ex in overrides.items():  # moved exceptions can land in the window from outside it
             timing = Timing.of(ex)
             if ex["status"] == "confirmed" and timing.overlaps(lo, hi, start, end):
-                found.append((timing, _occurrence(master, ex, timing, key=key, is_exception=True)))
+                found.append(
+                    (timing, _occurrence(master, ex, timing, key=key, is_exception=True, writable=writable))
+                )
     found.sort(key=lambda pair: pair[0].sort_moment(ctx.timezone))
     return [occurrence for _, occurrence in found]
 
@@ -308,8 +327,15 @@ async def create_event(ctx: Ctx, space_id: str, data: EventCreate) -> dict[str, 
     _require_on_pattern(rule, timing, tz)
     stamp = now_iso()
     event_id = new_id()
+    source_id = str(data.calendar_source_id) if data.calendar_source_id else None
     async with ctx.write() as conn:
         await require_space(conn, ctx, space_id, Action.WRITE)
+        if source_id:
+            source = await _writable_source(conn, ctx, source_id)
+            if source["space_id"] != space_id:
+                raise Invalid("That calendar feeds a different space.", code="CALENDAR_SPACE_MISMATCH")
+            if rule and source["provider"] == "microsoft":
+                raise _repeating_outlook()
         row = (
             (
                 await conn.execute(
@@ -322,6 +348,8 @@ async def create_event(ctx: Ctx, space_id: str, data: EventCreate) -> dict[str, 
                         location=data.location,
                         timezone=tz_name,
                         rrule=rule,
+                        calendar_source_id=source_id,
+                        needs_push=source_id is not None,
                         created_at=stamp,
                         updated_at=stamp,
                         **timing.columns(),
@@ -339,16 +367,55 @@ async def create_event(ctx: Ctx, space_id: str, data: EventCreate) -> dict[str, 
 # --------------------------------------------------------------------------- update
 
 
+def _repeating_outlook() -> Invalid:
+    return Invalid(
+        "Outlook calendars show each occurrence separately; create or change repeating events in Outlook.",
+        code="PROVIDER_UNSUPPORTED",
+    )
+
+
+async def _writable_source(conn: AsyncConnection, ctx: Ctx, source_id: str) -> RowMapping:
+    """A calendar source Agenda may write to: the caller's, enabled, and switched to two-way."""
+    source = (
+        (
+            await conn.execute(
+                select(calendar_sources, external_accounts.c.provider)
+                .join(external_accounts, external_accounts.c.id == calendar_sources.c.external_account_id)
+                .where(calendar_sources.c.id == source_id, external_accounts.c.user_id == ctx.user_id)
+            )
+        )
+        .mappings()
+        .first()
+    )
+    if source is None:
+        raise NotFound("Calendar")
+    if source["sync_mode"] != "two_way" or not source["enabled"]:
+        raise Conflict(
+            "This event comes from a read-only calendar. Turn on two-way sync for it to edit here.",
+            code="READ_ONLY_SOURCE",
+        )
+    return source
+
+
+async def _mark_for_push(conn: AsyncConnection, *series_ids: str) -> None:
+    """Flag the changed series' provider-backed rows so the push job sends them (ADR 0005)."""
+    await conn.execute(
+        update(events)
+        .where(
+            events.c.calendar_source_id.is_not(None),
+            or_(events.c.id.in_(series_ids), events.c.series_id.in_(series_ids)),
+        )
+        .values(needs_push=True)
+    )
+
+
 async def _target(conn: AsyncConnection, ctx: Ctx, event_id: str) -> tuple[RowMapping, str | None]:
     """(single event or series master, implied occurrence key when an exception row was named)."""
     row = await load_in_space(conn, ctx, events, event_id, Action.WRITE, "Event")
     if row["deleted_at"]:
         raise NotFound("Event")
     if row["calendar_source_id"] is not None:
-        # imported read-only (Phase 3); two-way sync arrives in Phase 4
-        raise Conflict(
-            "This event comes from a provider calendar and can't be changed here.", code="READ_ONLY_SOURCE"
-        )
+        await _writable_source(conn, ctx, row["calendar_source_id"])
     if row["series_id"] is None:
         return row, None
     master = (await conn.execute(select(events).where(events.c.id == row["series_id"]))).mappings().one()
@@ -389,17 +456,31 @@ async def update_event(
         target, implied = await _target(conn, ctx, event_id)
         check_revision(target["id"], target["revision"], expected)
         scope, key = _resolve(target, implied, scope, occurrence_start)
+        if patch.rrule and target["calendar_source_id"] and await _is_outlook(conn, target):
+            raise _repeating_outlook()
+        changed = [target["id"]]
         if scope == "this":
             row = await _edit_one(conn, target, key, patch)  # type: ignore[arg-type]
         elif scope == "following":
             tail = await _split(conn, target, key, expected)  # type: ignore[arg-type]
             row = await _edit_series(conn, tail, patch, key, 1)
+            changed.append(tail["id"])
         else:
             row = await _edit_series(conn, target, patch, key, expected)
+        await _mark_for_push(conn, *changed)
         await record_event(
             conn, ctx, "event.changed", ("event", target["id"], target["revision"] + 1), target["space_id"]
         )
     return to_output(row)
+
+
+async def _is_outlook(conn: AsyncConnection, row: RowMapping) -> bool:
+    provider = await conn.scalar(
+        select(external_accounts.c.provider)
+        .join(calendar_sources, calendar_sources.c.external_account_id == external_accounts.c.id)
+        .where(calendar_sources.c.id == row["calendar_source_id"])
+    )
+    return provider == "microsoft"
 
 
 async def _edit_one(conn: AsyncConnection, master: RowMapping, key: str, patch: EventPatch) -> RowMapping:
@@ -426,6 +507,7 @@ async def _edit_one(conn: AsyncConnection, master: RowMapping, key: str, patch: 
             **{**{f: master[f] for f in CONTENT}, **values},  # patched content wins
             series_id=master["id"],
             original_start=key,
+            calendar_source_id=master["calendar_source_id"],
             created_at=stamp,
             updated_at=stamp,
         )
@@ -517,6 +599,7 @@ async def _split(conn: AsyncConnection, master: RowMapping, key: str, expected: 
             **{f: master[f] for f in CONTENT},
             timezone=master["timezone"],
             rrule=tail,
+            calendar_source_id=master["calendar_source_id"],
             created_at=stamp,
             updated_at=stamp,
             **occurrence.columns(),
@@ -560,6 +643,7 @@ async def delete_event(
             series = await conn.execute(select(events.c.id).where(events.c.series_id == target["id"]))
             await _tombstone(conn, [target["id"], *(r.id for r in series)])
             await audit(conn, ctx, "event.deleted", "event", target["id"], target["space_id"])
+        await _mark_for_push(conn, target["id"])
         await record_event(
             conn,
             ctx,
@@ -589,6 +673,7 @@ async def _cancel_one(conn: AsyncConnection, master: RowMapping, key: str) -> No
                 series_id=master["id"],
                 original_start=key,
                 status="cancelled",
+                calendar_source_id=master["calendar_source_id"],
                 created_at=stamp,
                 updated_at=stamp,
                 **occurrence.columns(),

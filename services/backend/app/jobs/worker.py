@@ -27,8 +27,8 @@ log = logging.getLogger(__name__)
 
 Handler = Callable[[dict[str, Any]], Awaitable[None]]
 
-# Which job kinds each outbox event fans out to. Empty in Phase 1; Phase 3 adds provider
-# writes on event.changed, Phase 5 reminder recalculation on task.* and event.*.
+# Which job kinds each outbox event fans out to. The app wires provider writes on event.* (Phase 4);
+# Phase 5 adds reminder recalculation on task.* and event.*.
 SUBSCRIPTIONS: dict[str, list[str]] = {}
 HANDLERS: dict[str, Handler] = {}
 

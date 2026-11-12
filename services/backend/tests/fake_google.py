@@ -2,6 +2,8 @@
 
 It keeps a change log per calendar so sync tokens behave like Google's: a token returns only
 what changed after it, deletions come back as status=cancelled, and expired tokens get 410.
+Writes honour If-Match (412 on a stale ETag), client-chosen ids (409 when taken), and instance
+ids of the form `<series id>_<original start>`.
 """
 
 from __future__ import annotations
@@ -11,6 +13,7 @@ import hashlib
 import json
 import secrets
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
@@ -44,6 +47,10 @@ class FakeGoogle:
         self.event_requests = 0
         self.subject = "google-sub-1"
         self.email = "pete@example.com"
+        self.writes: list[tuple[str, str, str | None]] = []  # (method, event id, If-Match)
+        self.fail_writes: list[httpx.Response] = []
+        self.access_role = "owner"
+        self.granted_scope = ""
 
     # ------------------------------------------------------------------ test helpers
 
@@ -77,6 +84,9 @@ class FakeGoogle:
         query = {k: v[0] for k, v in parse_qs(urlparse(url).query).items()}
         assert query["code_challenge_method"] == "S256"
         assert query["access_type"] == "offline"
+        if query.get("include_granted_scopes") == "true" and self.granted_scope:
+            query["scope"] = " ".join(dict.fromkeys(self.granted_scope.split() + query["scope"].split()))
+        self.granted_scope = query["scope"]
         code = secrets.token_hex(8)
         self.pending_codes[code] = query
         return code
@@ -99,9 +109,80 @@ class FakeGoogle:
             return httpx.Response(
                 200, json={"items": [self._calendar_entry(c) for c in self.calendars.values()]}
             )
+        parts = url.path.split("/")
         if url.path.startswith("/calendar/v3/calendars/") and url.path.endswith("/events"):
-            return self._events(url.path.split("/")[4], dict(url.params))
+            if request.method == "POST":
+                return self._insert(parts[4], json.loads(request.content))
+            return self._events(parts[4], dict(url.params))
+        if url.path.startswith("/calendar/v3/calendars/") and len(parts) == 7 and parts[5] == "events":
+            return self._one(request, parts[4], parts[6])
         return httpx.Response(404)
+
+    # ------------------------------------------------------------------ writes
+
+    def _stamp(self, cal: Calendar, item: dict[str, Any]) -> dict[str, Any]:
+        item = {**item, "etag": f'"{secrets.token_hex(4)}"'}
+        cal.events[item["id"]] = item
+        cal.log.append(item["id"])
+        return item
+
+    def _insert(self, cal_id: str, body: dict[str, Any]) -> httpx.Response:
+        cal = self.calendars[cal_id]
+        if self.fail_writes:
+            return self.fail_writes.pop(0)
+        self.writes.append(("POST", body["id"], None))
+        if body["id"] in cal.events:
+            return httpx.Response(409, json={"error": {"code": 409, "message": "duplicate"}})
+        return httpx.Response(200, json=self._stamp(cal, {"status": "confirmed", **body}))
+
+    def _instance_base(self, cal: Calendar, event_id: str) -> dict[str, Any] | None:
+        """An unmodified occurrence, synthesised from its series like Google does."""
+        master_id, _, stamp = event_id.rpartition("_")
+        master = cal.events.get(master_id)
+        if not master_id or master is None or master.get("status") == "cancelled":
+            return None
+        if len(stamp) == 8:
+            original = {"date": f"{stamp[:4]}-{stamp[4:6]}-{stamp[6:]}"}
+        else:
+            moment = datetime.strptime(stamp, "%Y%m%dT%H%M%SZ").replace(tzinfo=UTC)
+            original = {"dateTime": moment.isoformat(), "timeZone": master["start"].get("timeZone", "UTC")}
+        return {
+            "id": event_id,
+            "status": "confirmed",
+            "summary": master.get("summary"),
+            "recurringEventId": master_id,
+            "originalStartTime": original,
+            "start": original,
+            "end": original,
+            "etag": master["etag"],
+        }
+
+    def _one(self, request: httpx.Request, cal_id: str, event_id: str) -> httpx.Response:
+        cal = self.calendars[cal_id]
+        current = cal.events.get(event_id) or self._instance_base(cal, event_id)
+        if request.method == "GET":
+            return httpx.Response(200, json=current) if current else httpx.Response(404)
+        if self.fail_writes:
+            return self.fail_writes.pop(0)
+        if_match = request.headers.get("If-Match")
+        self.writes.append((request.method, event_id, if_match))
+        if current is None:
+            return httpx.Response(404)
+        if if_match and if_match != current["etag"]:
+            return httpx.Response(412, json={"error": {"code": 412, "message": "Precondition Failed"}})
+        if request.method == "DELETE":
+            if current.get("status") == "cancelled":
+                return httpx.Response(410)
+            if event_id not in cal.events:
+                cal.events[event_id] = current
+            self.delete(cal_id, event_id)
+            return httpx.Response(204)
+        body = json.loads(request.content)
+        merged = {**current, **body}
+        if "recurringEventId" in current:
+            merged["recurringEventId"] = current["recurringEventId"]
+            merged["originalStartTime"] = current["originalStartTime"]
+        return httpx.Response(200, json=self._stamp(cal, merged))
 
     def _calendar_entry(self, cal: Calendar) -> dict[str, Any]:
         return {
@@ -109,7 +190,7 @@ class FakeGoogle:
             "summary": cal.summary,
             "timeZone": cal.timezone,
             "primary": cal.primary,
-            "accessRole": "owner",
+            "accessRole": self.access_role,
             "backgroundColor": "#039be5",
         }
 
@@ -125,6 +206,7 @@ class FakeGoogle:
             if form["redirect_uri"][0] != pending["redirect_uri"]:
                 return httpx.Response(400, json={"error": "redirect_uri_mismatch"})
             refresh = f"refresh-{secrets.token_hex(4)}"
+            # what was consented to is what the token carries
             self.refresh_tokens.add(refresh)
             id_token = f"{_b64({'alg': 'none'})}.{_b64({'sub': self.subject, 'email': self.email})}.sig"
             return httpx.Response(

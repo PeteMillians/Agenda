@@ -38,3 +38,4 @@ ignore = ["B008"]  # FastAPI's Depends() in defaults is idiomatic
 
 [tool.ruff.lint.per-file-ignores]
 "migrations/versions/*" = ["E501"]  # long SQL constraint strings from autogenerate
+"tests/test_two_way.py" = ["F401", "F811"]  # reuses the Google suite's fixtures by importing them
