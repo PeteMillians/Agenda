@@ -170,30 +170,21 @@ function Items({ listId }: { listId: string }) {
       </form>
       <ul className="rows">
         {items.map((item) => (
-          <li key={item.id} className="row">
-            <input
-              type="checkbox"
-              aria-label={`Check ${item.text}`}
-              checked={item.checked}
-              onChange={() => patchItem(item, { checked: !item.checked })}
-            />
-            <span className={item.checked ? "grow done" : "grow"}>{item.text}</span>
-            <button
-              className="quiet"
-              aria-label={`Remove ${item.text}`}
-              onClick={() =>
-                run(async () =>
-                  call(
-                    (await api()).DELETE("/api/v1/list-items/{item_id}", {
-                      params: { path: { item_id: item.id }, header: ifMatch(item.revision) },
-                    }),
-                  ),
-                )
-              }
-            >
-              ×
-            </button>
-          </li>
+          <ItemRow
+            key={item.id}
+            item={item}
+            onToggle={() => patchItem(item, { checked: !item.checked })}
+            onRename={(text) => patchItem(item, { text })}
+            onRemove={() =>
+              run(async () =>
+                call(
+                  (await api()).DELETE("/api/v1/list-items/{item_id}", {
+                    params: { path: { item_id: item.id }, header: ifMatch(item.revision) },
+                  }),
+                ),
+              )
+            }
+          />
         ))}
       </ul>
       {items.some((i) => i.checked) && (
@@ -208,6 +199,47 @@ function Items({ listId }: { listId: string }) {
       )}
       {(error || detail.error) && <p className="problem">{error ?? detail.error}</p>}
     </div>
+  );
+}
+
+function ItemRow(props: { item: ListItem; onToggle: () => void; onRename: (text: string) => void; onRemove: () => void }) {
+  const { item } = props;
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(item.text);
+  return (
+    <li className="row">
+      <input type="checkbox" aria-label={`Check ${item.text}`} checked={item.checked} onChange={props.onToggle} />
+      {editing ? (
+        <form
+          className="grow"
+          onSubmit={(e) => {
+            e.preventDefault();
+            setEditing(false);
+            const trimmed = text.trim();
+            if (trimmed && trimmed !== item.text) props.onRename(trimmed);
+          }}
+        >
+          <input
+            aria-label={`New text for ${item.text}`}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => e.key === "Escape" && setEditing(false)}
+            autoFocus
+            onBlur={() => setEditing(false)}
+          />
+        </form>
+      ) : (
+        <span className={item.checked ? "grow done" : "grow"}>{item.text}</span>
+      )}
+      {!editing && (
+        <button className="quiet" aria-label={`Edit ${item.text}`} onClick={() => (setText(item.text), setEditing(true))}>
+          Edit
+        </button>
+      )}
+      <button className="quiet" aria-label={`Remove ${item.text}`} onClick={props.onRemove}>
+        ×
+      </button>
+    </li>
   );
 }
 
