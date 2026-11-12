@@ -3,6 +3,7 @@ import { useState } from "react";
 import { z } from "zod";
 import { api } from "../api/backend";
 import { call, ifMatch, useAction, useLoad } from "../api/call";
+import { fetchAllPages } from "../api/pages";
 import { defineWidget, type WidgetProps } from "../dashboard/registry";
 import { describeRule, formatDay, formatTime, localDateOf, today, weekdayCode } from "../dates";
 import { SpaceDot, SpacePicker } from "../state/spaces";
@@ -42,12 +43,14 @@ function TasksWidget({ config, spaceIds }: WidgetProps<Config>) {
   const tasks = useLoad(async () => {
     const client = await api();
     const status = config.completed ? "done" : "open";
-    const pages = await Promise.all(
+    const lists = await Promise.all(
       spaceIds.map((space_id) =>
-        call(client.GET("/api/v1/spaces/{space_id}/tasks", { params: { path: { space_id }, query: { status, limit: 200 } } })),
+        fetchAllPages((cursor) =>
+          call(client.GET("/api/v1/spaces/{space_id}/tasks", { params: { path: { space_id }, query: { status, limit: 200, cursor } } })),
+        ),
       ),
     );
-    return pages.flatMap((p) => p.data).sort((a, b) => (dueDay(a) ?? "9999").localeCompare(dueDay(b) ?? "9999"));
+    return lists.flat().sort((a, b) => (dueDay(a) ?? "9999").localeCompare(dueDay(b) ?? "9999"));
   }, [spaceIds.join(), config.completed]);
   const people = usePeople(spaceIds);
   const { run, error } = useAction(tasks.reload);
